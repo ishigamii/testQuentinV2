@@ -194,9 +194,9 @@ async function asyncCallOpenAI(prompt) {
       separator();
       if (formatedSubject) {
         prompt = createPrompt4(titre, formatedSubject);
-        const sectionText = await asyncCallOpenAI(prompt);
+        let sectionText = await asyncCallOpenAI(prompt);
         if( !sectionText.includes("<h2>") ) {
-          sectionText = `<h2>${formatedSubject}</h2>`
+          sectionText = `<h2>${formatedSubject}</h2>\n\n${sectionText}`
         }
         console.log(sectionText)
         subjectsData.push(sectionText);
