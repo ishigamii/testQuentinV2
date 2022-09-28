@@ -8,6 +8,7 @@ const jsdom = require("jsdom");
 moment.locale('fr-fr');
 
 let totalUsed = 0;
+let globalTotalUsed = 0;
 
 // Configuration
 
@@ -15,8 +16,7 @@ const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
 const outputFormat = "YYYY-MM-DD HH:mm";
 
-const regexFirstLine = /^(.*)$/m
-const regexBodyErrors = /<body>(<\/body>?)?$/gi
+// Prompts
 
 const createPrompt1 = (title) => {
   return `rédige une table des matières très détaillée pour un article sur le sujet : ${title}\nNe pas prévoir une partie Introduction\nNe pas prévoir une partie Conclusion.`
@@ -31,7 +31,7 @@ const createPrompt2 = (titre, outputPrompt11) => {
 }
 
 const createPrompt3 = (titre, outputPrompt1) => {
-  return `rédige un texte de balise <meta name="description"> d'une longeur maximum de 155 caractères pour un article sur le sujet : ${titre} dont la table des matières est : ${outputPrompt1}\nMettre un majuscule en début de phrase\nne pas dépasser 155 caractères maximum.`
+  return `rédige un texte de balise <meta name="description"> d'une longeur maximum de 155 caractères pour un article sur le sujet : ${titre} dont la table des matières est : ${outputPrompt1}\nMettre un majuscule en début de phrase\nne pas dépasser les 155 caractères maximum.`
 }
 
 // Sujet étant les différents élements du prompt 1
@@ -43,12 +43,14 @@ const createPrompt5 = (titre, outputPrompt1) => {
   return `rédige un texte de conclusion pour un article sur le sujet : ${titre} dont la table des matières est : ${outputPrompt1}.`
 }
 
-// CSV & OpenAI
+// OpenAI Config
 
 const configuration = new Configuration({
   apiKey: process.env['OPENAI_API_KEY'],
 });
 const openai = new OpenAIApi(configuration);
+
+// CSV
 
 const titles = [];
 const crs = fs.createReadStream('sujets.csv')
@@ -66,16 +68,14 @@ const csvEnd = new Promise(function(resolve, reject) {
 
 const csvHeader = [
   { id: 'title', title: 'Title' },
-  { id: 'description', title: 'Description' },
-  { id: 'body', title: 'Body' },
   { id: 'full', title: 'Full Text' },
-  { id: 'regex', title: 'Regex Used' },
   { id: 'token', title: 'Token Used' },
-  { id: 'categories', title: 'Categories' },
-  { id: 'etiquettes', title: 'Etiquettes' },
-  { id: 'status', title: 'Status' },
-  { id: 'date', title: 'Date' },
 ];
+
+const csvWriter = createCsvWriter({
+  path: 'datas.csv',
+  header: csvHeader,
+});
 
 const csvWriterAppend = createCsvWriter({
   path: 'datasAppend.csv',
@@ -93,10 +93,6 @@ const csvErrorsWriterAppend = createCsvWriter({
   append: true,
 });
 
-const csvWriter = createCsvWriter({
-  path: 'datas.csv',
-  header: csvHeader,
-});
 
 function removeTagFromHtml(html) {
   if (html && !!html.trim()) {
@@ -118,18 +114,6 @@ function separator() {
   console.log('----------------------------------------');
 }
 
-const callOpenAI = (prompt) => {
-  return openai.createCompletion({
-    model: "text-davinci-002",
-    prompt: prompt,
-    temperature: 0.7,
-    max_tokens: 3000,
-    top_p: 1,
-    frequency_penalty: 0.2,
-    presence_penalty: 0.2,
-  });
-}
-
 async function asyncCallOpenAI(prompt) {
   const result = await openai.createCompletion({
     model: "text-davinci-002",
@@ -146,8 +130,8 @@ async function asyncCallOpenAI(prompt) {
   totalUsed += usage.total_tokens;
   console.log(`-- ${usage.total_tokens} Tokens used (${usage.prompt_tokens} + ${usage.completion_tokens}) --`);
   separator();
-  
-  let resultText = result.data.choices[0].text
+
+  let resultText = result.data.choices[0].text?.trim()
   return resultText;
 }
 
@@ -174,33 +158,32 @@ async function asyncCallOpenAI(prompt) {
     const { title: titre } = titres[i];
 
     let prompt = createPrompt1(titre);
-    let text = asyncCallOpenAI(prompt);
-
+    let text = await asyncCallOpenAI(prompt);
     for (let i = 0; i < 2; i++) {
       separator();
       console.log(text);
       prompt = createPrompt11(titre, text);
-      text = asyncCallOpenAI(prompt);
+      text = await asyncCallOpenAI(prompt);
     }
 
     separator();
-    let tableMatsFinal = text.replace("Table des matières",'').replaceAll("\n\n", '\n')
+    let tableMatsFinal = text.replace("Table des matières", '').replaceAll("\n\n", '\n')
     console.log(tableMatsFinal);
 
     separator();
     prompt = createPrompt2(titre, tableMatsFinal);
-    const introText = asyncCallOpenAI(prompt);
+    const introText = await asyncCallOpenAI(prompt);
     console.log("introText")
     console.log(introText)
     separator();
 
     separator();
     prompt = createPrompt3(titre, tableMatsFinal);
-    const metaDescriptionText = asyncCallOpenAI(prompt);
+    const metaDescriptionText = await asyncCallOpenAI(prompt);
     console.log("metaDescriptionText")
     console.log(metaDescriptionText)
     separator();
-    
+
     const subjects = tableMatsFinal.split('\n').filter(t => t.trim());
     console.log(subjects)
     const subjectsData = []
@@ -211,7 +194,10 @@ async function asyncCallOpenAI(prompt) {
       separator();
       if (formatedSubject) {
         prompt = createPrompt4(titre, formatedSubject);
-        const sectionText = asyncCallOpenAI(prompt);
+        const sectionText = await asyncCallOpenAI(prompt);
+        if( !sectionText.includes("<h2>") ) {
+          sectionText = `<h2>${formatedSubject}</h2>`
+        }
         console.log(sectionText)
         subjectsData.push(sectionText);
       }
@@ -221,48 +207,30 @@ async function asyncCallOpenAI(prompt) {
 
     separator();
     prompt = createPrompt5(titre, tableMatsFinal);
-    const conclusionText = asyncCallOpenAI(prompt);
+    const conclusionText = await asyncCallOpenAI(prompt);
     console.log("conclusionText")
     console.log(conclusionText)
     separator();
 
     separator();
-    console.log([metaDescriptionText, introText, tableMatsFinal, subjectsData.join('\n'), conclusionText].join('\n'))
-    separator();
-    /*
-    separator();
-    console.log('-- Description --');
-    console.log(description)
-    console.log('');
-    console.log('-- Body --');
-    console.log(body)
+    const concat = [metaDescriptionText, introText, tableMatsFinal, subjectsData.join('\n'), conclusionText].join('\n')
     separator();
 
     const datas = {
       title: titre,
-      description: description,
-      body: body,
-      full: text,
-      regex: regex,
-      token: usage.total_tokens,
-      categories: categories || '',
-      etiquettes: etiquettes || '',
-      status: "future",
-      date: moment(new Date(startDate)).format(outputFormat) || '',
+      full: concat,
+      token: totalUsed,
     }
 
-    addHours(startDate)
-
     res.push(datas)
-
     csvWriterAppend.writeRecords([datas])
-    */
+
+    globalTotalUsed += totalUsed;
+    totalUsed = 0;
   }
-  console.log(`Total tokens used: ${totalUsed}`);
+  console.log(`Total tokens used: ${globalTotalUsed}`);
   separator();
-  /*
   csvWriter
     .writeRecords(res)
     .then(() => console.log('The CSV file was written successfully'));
-  */
 }());
