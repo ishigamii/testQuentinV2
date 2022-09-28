@@ -174,40 +174,29 @@ async function asyncCallOpenAI(prompt) {
     const { title: titre } = titres[i];
 
     let prompt = createPrompt1(titre);
-    let tableMats = await callOpenAI(prompt);
+    let text = asyncCallOpenAI(prompt);
 
     for (let i = 0; i < 2; i++) {
-    separator();
-    const usage = tableMats.data.usage;
-    totalUsed += usage.total_tokens;
-    console.log(`-- ${usage.total_tokens} Tokens used (${usage.prompt_tokens} + ${usage.completion_tokens}) --`);
-      
-      let text = tableMats.data.choices[0].text
+      separator();
       console.log(text);
       prompt = createPrompt11(titre, text);
-      tableMats = await callOpenAI(prompt);
+      text = asyncCallOpenAI(prompt);
     }
 
     separator();
-    const usage = tableMats.data.usage;
-    totalUsed += usage.total_tokens;
-    console.log(`-- ${usage.total_tokens} Tokens used (${usage.prompt_tokens} + ${usage.completion_tokens}) --`);
-
-    let tableMatsFinal = tableMats.data.choices[0].text.replace("Table des matières",'').replaceAll("\n\n", '\n')
+    let tableMatsFinal = text.replace("Table des matières",'').replaceAll("\n\n", '\n')
     console.log(tableMatsFinal);
 
     separator();
     prompt = createPrompt2(titre, tableMatsFinal);
-    const intro = await callOpenAI(prompt);
-    let introText = intro.data.choices[0].text;
+    const introText = asyncCallOpenAI(prompt);
     console.log("introText")
     console.log(introText)
     separator();
 
     separator();
     prompt = createPrompt3(titre, tableMatsFinal);
-    const metaDescription = await callOpenAI(prompt);
-    let metaDescriptionText = metaDescription.data.choices[0].text;
+    const metaDescriptionText = asyncCallOpenAI(prompt);
     console.log("metaDescriptionText")
     console.log(metaDescriptionText)
     separator();
@@ -222,8 +211,7 @@ async function asyncCallOpenAI(prompt) {
       separator();
       if (formatedSubject) {
         prompt = createPrompt4(titre, formatedSubject);
-        const section = await callOpenAI(prompt);
-        let sectionText = section.data.choices[0].text;
+        const sectionText = asyncCallOpenAI(prompt);
         console.log(sectionText)
         subjectsData.push(sectionText);
       }
@@ -233,8 +221,7 @@ async function asyncCallOpenAI(prompt) {
 
     separator();
     prompt = createPrompt5(titre, tableMatsFinal);
-    const conclusion = await callOpenAI(prompt);
-    let conclusionText = conclusion.data.choices[0].text;
+    const conclusionText = asyncCallOpenAI(prompt);
     console.log("conclusionText")
     console.log(conclusionText)
     separator();
