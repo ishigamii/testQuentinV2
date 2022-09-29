@@ -16,6 +16,8 @@ const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
 const outputFormat = "YYYY-MM-DD HH:mm";
 
+const regexTable = /^(\d\s?(\.|\)))*\s?/;
+
 const DEFAULT_TABLE_CONTENT_PATH = "tableContent.txt";
 
 // Prompts
@@ -37,8 +39,8 @@ const createPrompt3 = (titre, outputPrompt1) => {
 }
 
 // Sujet étant les différents élements du prompt 1
-const createPrompt4 = (titre, sujet, level=2) => {
-  return `rédige un paragraphe ${sujet} très détaillée pour un article sur le sujet : ${titre}\nCommence par un <h${level}>${sujet}</h${level}>\najoute ensuite un texte d’introduction\n ajoute toujours des sous-titres <h${level+1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français.`
+const createPrompt4 = (titre, sujet, level = 2) => {
+  return `rédige un paragraphe ${sujet} très détaillée pour un article sur le sujet : ${titre}\nCommence par un <h${level}>${sujet}</h${level}>\najoute ensuite un texte d’introduction\n ajoute toujours des sous-titres <h${level + 1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français.`
 }
 
 const createPrompt5 = (titre, outputPrompt1) => {
@@ -205,16 +207,19 @@ async function asyncCallOpenAI(prompt) {
     const subjects = tableMatsFinal.split('\n').filter(t => t.trim());
     console.log(subjects)
     const subjectsData = []
+    const deepthParent= {};
     for (let i = 0; i < subjects.length; i++) {
       separator();
-      const formatedSubject = subjects[i].replace(/^(\d\s?(\.|\)))*\s?/, "")
+      const deepth = regexTable.exec(subjects[i])[0].split(/\.|\)/).length
+      const formatedSubject = subjects[i].replace(regexTable, "")
+      deepthParent[deepth] = formatedSubject;
       console.log(formatedSubject)
       separator();
       if (formatedSubject) {
-        aiPrompt = createPrompt4(titre, formatedSubject);
+        aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth-1] : titre, formatedSubject, deepth);
         let sectionText = await asyncCallOpenAI(aiPrompt);
-        if (!sectionText.includes("<h2>")) {
-          sectionText = `<h2>${formatedSubject}</h2>\n\n${sectionText}`
+        if (!sectionText.includes(`<h${deepth}>`)) {
+          sectionText = `<h${deepth}>${formatedSubject}</h${deepth}>\n\n${sectionText}`
         }
         console.log(sectionText)
         subjectsData.push(sectionText);
