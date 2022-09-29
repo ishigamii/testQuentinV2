@@ -16,6 +16,8 @@ const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
 const outputFormat = "YYYY-MM-DD HH:mm";
 
+const DEFAULT_TABLE_CONTENT_PATH = "tableContent.txt";
+
 // Prompts
 
 const createPrompt1 = (title) => {
@@ -35,8 +37,8 @@ const createPrompt3 = (titre, outputPrompt1) => {
 }
 
 // Sujet étant les différents élements du prompt 1
-const createPrompt4 = (titre, sujet) => {
-  return `rédige un paragraphe ${sujet} très détaillée pour un article sur le sujet : ${titre}\nCommence par un <h2>${sujet}</h2>\najoute ensuite un texte d’introduction\n ajoute toujours des sous-titres <h3>\nutilise toujours des balises <p>\ntraduire les mots anglais en français.`
+const createPrompt4 = (titre, sujet, level=2) => {
+  return `rédige un paragraphe ${sujet} très détaillée pour un article sur le sujet : ${titre}\nCommence par un <h${level}>${sujet}</h${level}>\najoute ensuite un texte d’introduction\n ajoute toujours des sous-titres <h${level+1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français.`
 }
 
 const createPrompt5 = (titre, outputPrompt1) => {
@@ -141,29 +143,45 @@ async function asyncCallOpenAI(prompt) {
   separator();
 
   const res = [];
-
-  /*
-  const response = prompt("T'es content ?");
-
-  if (response.toLowerCase() === "oui" || 'o') {
-    console.log("gogog")
-  } else {
-    console.log("STOP")
-  }
-  */
+  const saved = [];
 
   for (let i = 0; i < titres.length; i++) {
     console.log(`-- ${new Date().toLocaleString('fr')} --`)
     console.log(`-- Génération du contenu ${i + 1} sur ${titres.length} --`);
     const { title: titre } = titres[i];
 
-    let prompt = createPrompt1(titre);
-    let text = await asyncCallOpenAI(prompt);
+    let aiPrompt = createPrompt1(titre);
+    let text = "";
+
+    while (true) {
+      text = await asyncCallOpenAI(aiPrompt);
+      separator();
+      console.log("Ancienne génération\n", saved.join('\n'));
+      separator();
+      console.log(text);
+      separator();
+      const response = prompt("On continue avec ça ? (Réponse: Oui/Non/Combo)");
+
+      if (["oui", 'o', 'yes', 'y'].includes(response.toLowerCase())) {
+        break;
+      }
+      if (["combo", 'c'].includes(response.toLowerCase())) {
+        saved.push(text);
+        fs.writeFileSync(DEFAULT_TABLE_CONTENT_PATH, saved.join('\n'));
+        const combo = prompt("Pour combiner modifier le fichier tableContent.txt dans l'ordre que vous souhaitez puis répondez oui.");
+        if (["oui", 'o', 'yes', 'y'].includes(combo.toLowerCase())) {
+          text = fs.readFileSync(DEFAULT_TABLE_CONTENT_PATH, "utf8");
+          break;
+        }
+      }
+      saved.push(text);
+    }
+
     for (let i = 0; i < 2; i++) {
       separator();
       console.log(text);
-      prompt = createPrompt11(titre, text);
-      text = await asyncCallOpenAI(prompt);
+      aiPrompt = createPrompt11(titre, text);
+      text = await asyncCallOpenAI(aiPrompt);
     }
 
     separator();
@@ -171,15 +189,15 @@ async function asyncCallOpenAI(prompt) {
     console.log(tableMatsFinal);
 
     separator();
-    prompt = createPrompt2(titre, tableMatsFinal);
-    const introText = await asyncCallOpenAI(prompt);
+    aiPrompt = createPrompt2(titre, tableMatsFinal);
+    const introText = await asyncCallOpenAI(aiPrompt);
     console.log("introText")
     console.log(introText)
     separator();
 
     separator();
-    prompt = createPrompt3(titre, tableMatsFinal);
-    const metaDescriptionText = await asyncCallOpenAI(prompt);
+    aiPrompt = createPrompt3(titre, tableMatsFinal);
+    const metaDescriptionText = await asyncCallOpenAI(aiPrompt);
     console.log("metaDescriptionText")
     console.log(metaDescriptionText)
     separator();
@@ -193,9 +211,9 @@ async function asyncCallOpenAI(prompt) {
       console.log(formatedSubject)
       separator();
       if (formatedSubject) {
-        prompt = createPrompt4(titre, formatedSubject);
-        let sectionText = await asyncCallOpenAI(prompt);
-        if( !sectionText.includes("<h2>") ) {
+        aiPrompt = createPrompt4(titre, formatedSubject);
+        let sectionText = await asyncCallOpenAI(aiPrompt);
+        if (!sectionText.includes("<h2>")) {
           sectionText = `<h2>${formatedSubject}</h2>\n\n${sectionText}`
         }
         console.log(sectionText)
@@ -206,8 +224,8 @@ async function asyncCallOpenAI(prompt) {
     //console.log(subjectsData)
 
     separator();
-    prompt = createPrompt5(titre, tableMatsFinal);
-    const conclusionText = await asyncCallOpenAI(prompt);
+    aiPrompt = createPrompt5(titre, tableMatsFinal);
+    const conclusionText = await asyncCallOpenAI(aiPrompt);
     console.log("conclusionText")
     console.log(conclusionText)
     separator();
