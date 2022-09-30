@@ -16,7 +16,7 @@ const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
 const outputFormat = "YYYY-MM-DD HH:mm";
 
-const regexTable = /^(\d\s?(\.|\)))*\s?/;
+const regexTable = /^\s*(\d\s?(\.|\)))*\s*/;
 
 const DEFAULT_TABLE_CONTENT_PATH = "tableContent.txt";
 
@@ -31,11 +31,11 @@ const createPrompt11 = (titre, outputPrompt1) => {
 }
 
 const createPrompt2 = (titre, outputPrompt11) => {
-  return `rédige un texte d'introduction pour un article sur le sujet : ${titre} qui présente la table des matières : ${outputPrompt11}.`
+  return `rédige une introduction jusqu'à 80 mots pour un article sur le sujet : ${titre}.`
 }
 
 const createPrompt3 = (titre, outputPrompt1) => {
-  return `rédige un texte de balise <meta name="description"> d'une longeur maximum de 155 caractères pour un article sur le sujet : ${titre} dont la table des matières est : ${outputPrompt1}\nMettre un majuscule en début de phrase\nne pas dépasser les 155 caractères maximum.`
+  return `rédige une meta description jusqu'à 30 mots pour un article sur le sujet : ${titre} dont la table des matières est : ${outputPrompt1}\nMettre un majuscule en début de phrase\nne pas dépasser les 155 caractères maximum\nutiliser la balise <meta name="description">.`
 }
 
 // Sujet étant les différents élements du prompt 1
@@ -116,6 +116,13 @@ function addHours(date = new Date(), numOfHours = intervaleHour) {
 
 function separator() {
   console.log('----------------------------------------');
+}
+
+function getDeepth(subject) {
+  if( !subject ) {
+    return -1;
+  }
+  return regexTable.exec(subject)[0].split(/\.|\)/).length
 }
 
 async function asyncCallOpenAI(prompt) {
@@ -204,19 +211,23 @@ async function asyncCallOpenAI(prompt) {
     console.log(metaDescriptionText)
     separator();
 
-    const subjects = tableMatsFinal.split('\n').filter(t => t.trim());
+    const subjects = tableMatsFinal.split('\n').map(t => t.trim()).filter(t => t);
     console.log(subjects)
     const subjectsData = []
-    const deepthParent= {};
+    const deepthParent = {};
     for (let i = 0; i < subjects.length; i++) {
       separator();
-      const deepth = regexTable.exec(subjects[i])[0].split(/\.|\)/).length
+      const deepth = getDeepth(subjects[i]);
+      const deepthNext = getDeepth(subjects[i + 1]);
       const formatedSubject = subjects[i].replace(regexTable, "")
       deepthParent[deepth] = formatedSubject;
       console.log(formatedSubject)
       separator();
       if (formatedSubject) {
-        aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth-1] : titre, formatedSubject, deepth);
+        aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
+        if (deepthNext > deepth) {
+          aiPrompt = createPrompt2(deepthParent[deepth - 1]);
+        }
         let sectionText = await asyncCallOpenAI(aiPrompt);
         if (!sectionText.includes(`<h${deepth}>`)) {
           sectionText = `<h${deepth}>${formatedSubject}</h${deepth}>\n\n${sectionText}`
