@@ -12,6 +12,9 @@ let globalTotalUsed = 0;
 
 // Configuration
 
+const SHOW_PROMPT = false;
+const USE_BACKGROUND_INFO = true;
+
 const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
 const outputFormat = "YYYY-MM-DD HH:mm";
@@ -19,6 +22,12 @@ const outputFormat = "YYYY-MM-DD HH:mm";
 const regexTable = /^\s*(\d\s?(\.|\)))*\s*/;
 
 const DEFAULT_TABLE_CONTENT_PATH = "tableContent.txt";
+
+//CACA QUENTIN : Récuperer contenu background info
+
+const DEFAULT_BACKGROUND_INFO_PATH = "backgroundinfo.txt";
+const DEFAULT_BACKGROUND_INFO_PATH_OLD = "backgroundinfo_old.txt";
+const backgroundInfo = fs.readFileSync(DEFAULT_BACKGROUND_INFO_PATH, "utf8")
 
 // Prompts
 
@@ -40,7 +49,8 @@ const createPrompt3 = (titre, outputPrompt1) => {
 
 // Sujet étant les différents élements du prompt 1
 const createPrompt4 = (titre, sujet, level = 2) => {
-  return `rédige un paragraphe ${sujet} très détaillée pour un article sur le sujet : ${titre}\nCommence par un <h${level}>${sujet}</h${level}>\najoute ensuite un texte d’introduction\n ajoute toujours des sous-titres <h${level + 1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français.`
+  let background = USE_BACKGROUND_INFO && backgroundInfo ? `Background information : ${backgroundInfo}\n` : '';
+  return `${background}rédige un paragraphe ${sujet} très détaillée pour un article sur le sujet : ${titre}\nCommence par un <h${level}>${sujet}</h${level}>\najoute ensuite un texte d’introduction\n ajoute toujours des sous-titres <h${level + 1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français.`
 }
 
 const createPrompt5 = (titre, outputPrompt1) => {
@@ -119,13 +129,19 @@ function separator() {
 }
 
 function getDeepth(subject) {
-  if( !subject ) {
+  if (!subject) {
     return -1;
   }
   return regexTable.exec(subject)[0].split(/\.|\)/).length
 }
 
 async function asyncCallOpenAI(prompt) {
+  if (SHOW_PROMPT) {
+    separator();
+    console.log(`-- Running this prompt --`);
+    console.log(`-- ${prompt} --`);
+    separator();
+  }
   const result = await openai.createCompletion({
     model: "text-davinci-002",
     prompt: prompt,
@@ -177,7 +193,7 @@ async function asyncCallOpenAI(prompt) {
       if (["combo", 'c'].includes(response.toLowerCase())) {
         saved.push(text);
         fs.writeFileSync(DEFAULT_TABLE_CONTENT_PATH, saved.join('\n'));
-        const combo = prompt("Pour combiner modifier le fichier tableContent.txt dans l'ordre que vous souhaitez puis répondez oui.");
+        const combo = prompt("Pour combiner, modifiez le fichier tableContent.txt dans l'ordre que vous souhaitez (attention de bien garder les . derrières les chiffres ex: 1. / 1.1. / 1.2.3. ) puis répondez oui.");
         if (["oui", 'o', 'yes', 'y'].includes(combo.toLowerCase())) {
           text = fs.readFileSync(DEFAULT_TABLE_CONTENT_PATH, "utf8");
           break;
@@ -226,7 +242,7 @@ async function asyncCallOpenAI(prompt) {
       if (formatedSubject) {
         aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
         if (deepthNext > deepth) {
-          aiPrompt = createPrompt2(deepthParent[deepth - 1]);
+          aiPrompt = createPrompt2(formatedSubject);
         }
         let sectionText = await asyncCallOpenAI(aiPrompt);
         if (!sectionText.includes(`<h${deepth}>`)) {
@@ -267,4 +283,8 @@ async function asyncCallOpenAI(prompt) {
   csvWriter
     .writeRecords(res)
     .then(() => console.log('The CSV file was written successfully'));
+
+  fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH_OLD, backgroundInfo);
+  fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH, "");
 }());
+
