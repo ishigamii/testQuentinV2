@@ -13,8 +13,8 @@ let globalTotalUsed = 0;
 // Configuration
 
 const SHOW_PROMPT = false;
-const USE_BACKGROUND_INFO = true;
 const EXTRACT_HTML = true;
+const USE_BACKGROUND_INFO = true || EXTRACT_HTML;
 
 const options = [{ label: "Background info", value: USE_BACKGROUND_INFO },
 { label: "Extract from html", value: EXTRACT_HTML },
@@ -31,7 +31,7 @@ const DEFAULT_TABLE_CONTENT_PATH = "tableContent.txt";
 // Background infos
 const DEFAULT_BACKGROUND_INFO_PATH = "backgroundinfo.txt";
 const DEFAULT_BACKGROUND_INFO_PATH_OLD = "backgroundinfo_old.txt";
-const backgroundInfo = fs.readFileSync(DEFAULT_BACKGROUND_INFO_PATH, "utf8")
+let backgroundInfo = fs.readFileSync(DEFAULT_BACKGROUND_INFO_PATH, "utf8")
 
 // HTML file base
 const DEFAULT_HTML_PATH = 'html.txt';
@@ -167,20 +167,20 @@ function getTitlesFromFile() {
 }
 
 function getTableMatiere(extractArray) {
-  const lastIndex = [1,0,0];
+  const lastIndex = [1, 0, 0];
   return extractArray.map((e) => {
     let index = "";
-    if( e.tag === 'H1') {
+    if (e.tag === 'H1') {
       index = lastIndex[0];
       lastIndex[1] = 1
       lastIndex[2] = 1
     }
-    if( e.tag === 'H2') {
+    if (e.tag === 'H2') {
       lastIndex[1]++
       lastIndex[2] = 0
       index = `${lastIndex[0]}.${lastIndex[1]}`;
     }
-    if( e.tag === 'H3') {
+    if (e.tag === 'H3') {
       lastIndex[2]++
       index = `${lastIndex[0]}.${lastIndex[1]}.${lastIndex[2]}`;
     }
@@ -249,11 +249,11 @@ async function asyncCallOpenAI(prompt) {
   if (EXTRACT_HTML) {
     extract = getTitlesFromFile();
     tableMatiere = getTableMatiere(extract);
-  
+
     console.log(tableMatiere)
     separator();
   }
-  
+
   const checkOptions = prompt(`Récap des options:\n\n${options.map((o) => `${o.label} : ${o.value}`).join('\n')}\n\nVoulez-vous continuer avec ces options ? (Réponse: Oui/Non)`);
   if (!isPromptYes(checkOptions)) {
     return;
@@ -262,12 +262,12 @@ async function asyncCallOpenAI(prompt) {
   for (let i = 0; i < titres.length; i++) {
     console.log(`-- ${new Date().toLocaleString('fr')} --`)
     console.log(`-- Génération du contenu ${i + 1} sur ${titres.length} --`);
-    const { title: titre } = titres[i];
+    let { title: titre } = titres[i];
 
     let text = "";
-    if( !EXTRACT_HTML ){
+    if (!EXTRACT_HTML) {
       let aiPrompt = createPrompt1(titre);
-  
+
       while (true) {
         text = await asyncCallOpenAI(aiPrompt);
         separator();
@@ -275,7 +275,7 @@ async function asyncCallOpenAI(prompt) {
         separator();
         console.log(text);
         separator();
-  
+
         const response = prompt("On continue avec ça ? (Réponse: Oui/Non/Combo)");
         if (isPromptYes(response)) {
           break;
@@ -291,7 +291,7 @@ async function asyncCallOpenAI(prompt) {
         }
         saved.push(text);
       }
-  
+
       for (let i = 0; i < 2; i++) {
         separator();
         console.log(text);
@@ -299,6 +299,7 @@ async function asyncCallOpenAI(prompt) {
         text = await asyncCallOpenAI(aiPrompt);
       }
     } else {
+      titre = extract[0].title;
       text = tableMatiere;
     }
 
@@ -333,6 +334,10 @@ async function asyncCallOpenAI(prompt) {
       console.log(formatedSubject)
       separator();
       if (formatedSubject) {
+        if (EXTRACT_HTML) {
+          backgroundInfo = extract[i].paragraph;
+        }
+
         aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
         if (deepthNext > deepth) {
           aiPrompt = createPrompt2(formatedSubject);
