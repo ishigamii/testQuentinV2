@@ -13,7 +13,7 @@ let globalTotalUsed = 0;
 // Configuration
 
 const SHOW_PROMPT = false;
-const USE_BACKGROUND_INFO = true;
+const USE_BACKGROUND_INFO = false;
 
 const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
@@ -23,8 +23,7 @@ const regexTable = /^\s*(\d\s?(\.|\)))*\s*/;
 
 const DEFAULT_TABLE_CONTENT_PATH = "tableContent.txt";
 
-//CACA QUENTIN : Récuperer contenu background info
-
+// Background infos
 const DEFAULT_BACKGROUND_INFO_PATH = "backgroundinfo.txt";
 const DEFAULT_BACKGROUND_INFO_PATH_OLD = "backgroundinfo_old.txt";
 const backgroundInfo = fs.readFileSync(DEFAULT_BACKGROUND_INFO_PATH, "utf8")
@@ -284,7 +283,10 @@ async function asyncCallOpenAI(prompt) {
     .writeRecords(res)
     .then(() => console.log('The CSV file was written successfully'));
 
-  fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH_OLD, backgroundInfo);
-  fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH, "");
+  if (USE_BACKGROUND_INFO) {
+    fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH_OLD, backgroundInfo);
+    fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH, "");
+  }
+  
 }());
 
