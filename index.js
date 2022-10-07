@@ -14,8 +14,10 @@ let globalTotalUsed = 0;
 
 const SHOW_PROMPT = false;
 const USE_BACKGROUND_INFO = true;
+const EXTRACT_HTML = true;
 
 const options = [{ label: "Background info", value: USE_BACKGROUND_INFO },
+{ label: "Extract from html", value: EXTRACT_HTML },
 { label: "Show prompt", value: SHOW_PROMPT }]
 
 const startDate = new Date("2022-08-01 8:00");
@@ -30,6 +32,9 @@ const DEFAULT_TABLE_CONTENT_PATH = "tableContent.txt";
 const DEFAULT_BACKGROUND_INFO_PATH = "backgroundinfo.txt";
 const DEFAULT_BACKGROUND_INFO_PATH_OLD = "backgroundinfo_old.txt";
 const backgroundInfo = fs.readFileSync(DEFAULT_BACKGROUND_INFO_PATH, "utf8")
+
+// HTML file base
+const DEFAULT_HTML_PATH = 'html.txt';
 
 // Prompts
 
@@ -121,6 +126,68 @@ function removeTagFromHtml(html) {
   return "";
 }
 
+function getTitlesFromFile() {
+  const html = fs.readFileSync(DEFAULT_HTML_PATH, "utf8")
+  if (html && !!html.trim()) {
+    const { JSDOM } = jsdom;
+    const document = new JSDOM(html).window.document;
+    let res = [];
+    for (let i = 1; i < 4; i++) {
+      const target = `h${i}`;
+      const matches = Array.from(document.querySelectorAll(target));
+      //console.log(`${target}:`);
+      //console.log(matches.map((e) => e.textContent).filter((e) => e?.trim()).join('\n'));
+      res = [...res, ...matches.map((e) => {
+        //console.log("======")
+        //console.log(e.textContent)
+        //console.log(html.indexOf(e.innerHTML))
+        //console.log("======")
+        let next = e.nextElementSibling
+        let text = ''
+        while (next && !next.tagName.startsWith('H')) {
+          if (next?.innerHTML.match(/<h\d>/)) {
+            const div = document.createElement("div");
+            div.innerHTML = next?.innerHTML.split(/<h\d>/)[0]
+            text += div.textContent;
+            break;
+          } else {
+            //console.log(next?.textContent)
+            //console.log("===", next.tagName)
+            text += next?.textContent;
+          }
+          next = next.nextElementSibling;
+        }
+        //console.log(text)
+        return { position: html.indexOf(e.innerHTML), title: e.textContent, tag: e.tagName, paragraph: text }
+      })];
+    }
+    return res.filter((e) => e.title?.trim() && e.paragraph?.trim()).sort((a, b) => a.position - b.position);
+  }
+  return null;
+}
+
+function getTableMatiere(extractArray) {
+  const lastIndex = [1,0,0];
+  return extractArray.map((e) => {
+    let index = "";
+    if( e.tag === 'H1') {
+      index = lastIndex[0];
+      lastIndex[1] = 1
+      lastIndex[2] = 1
+    }
+    if( e.tag === 'H2') {
+      lastIndex[1]++
+      lastIndex[2] = 0
+      index = `${lastIndex[0]}.${lastIndex[1]}`;
+    }
+    if( e.tag === 'H3') {
+      lastIndex[2]++
+      index = `${lastIndex[0]}.${lastIndex[1]}.${lastIndex[2]}`;
+    }
+    return `${index}. ${e.title}`;
+  }).join('\n');
+}
+
 function addHours(date = new Date(), numOfHours = intervaleHour) {
   date.setTime(date.getTime() + numOfHours * 60 * 60 * 1000);
   return date;
@@ -176,6 +243,17 @@ async function asyncCallOpenAI(prompt) {
   const res = [];
   const saved = [];
 
+  let extract = [];
+  let tableMatiere = "";
+
+  if (EXTRACT_HTML) {
+    extract = getTitlesFromFile();
+    tableMatiere = getTableMatiere(extract);
+  
+    console.log(tableMatiere)
+    separator();
+  }
+  
   const checkOptions = prompt(`Récap des options:\n\n${options.map((o) => `${o.label} : ${o.value}`).join('\n')}\n\nVoulez-vous continuer avec ces options ? (Réponse: Oui/Non)`);
   if (!isPromptYes(checkOptions)) {
     return;
@@ -186,38 +264,42 @@ async function asyncCallOpenAI(prompt) {
     console.log(`-- Génération du contenu ${i + 1} sur ${titres.length} --`);
     const { title: titre } = titres[i];
 
-    let aiPrompt = createPrompt1(titre);
     let text = "";
-
-    while (true) {
-      text = await asyncCallOpenAI(aiPrompt);
-      separator();
-      console.log("Ancienne génération\n", saved.join('\n'));
-      separator();
-      console.log(text);
-      separator();
-      
-      const response = prompt("On continue avec ça ? (Réponse: Oui/Non/Combo)");
-      if (isPromptYes(response)) {
-        break;
-      }
-      if (["combo", 'c'].includes(response.toLowerCase())) {
-        saved.push(text);
-        fs.writeFileSync(DEFAULT_TABLE_CONTENT_PATH, saved.join('\n'));
-        const combo = prompt("Pour combiner, modifiez le fichier tableContent.txt dans l'ordre que vous souhaitez (attention de bien garder les . derrières les chiffres ex: 1. / 1.1. / 1.2.3. ) puis répondez oui.");
-        if (isPromptYes(combo)) {
-          text = fs.readFileSync(DEFAULT_TABLE_CONTENT_PATH, "utf8");
+    if( !EXTRACT_HTML ){
+      let aiPrompt = createPrompt1(titre);
+  
+      while (true) {
+        text = await asyncCallOpenAI(aiPrompt);
+        separator();
+        console.log("Ancienne génération\n", saved.join('\n'));
+        separator();
+        console.log(text);
+        separator();
+  
+        const response = prompt("On continue avec ça ? (Réponse: Oui/Non/Combo)");
+        if (isPromptYes(response)) {
           break;
         }
+        if (["combo", 'c'].includes(response.toLowerCase())) {
+          saved.push(text);
+          fs.writeFileSync(DEFAULT_TABLE_CONTENT_PATH, saved.join('\n'));
+          const combo = prompt("Pour combiner, modifiez le fichier tableContent.txt dans l'ordre que vous souhaitez (attention de bien garder les . derrières les chiffres ex: 1. / 1.1. / 1.2.3. ) puis répondez oui.");
+          if (isPromptYes(combo)) {
+            text = fs.readFileSync(DEFAULT_TABLE_CONTENT_PATH, "utf8");
+            break;
+          }
+        }
+        saved.push(text);
       }
-      saved.push(text);
-    }
-
-    for (let i = 0; i < 2; i++) {
-      separator();
-      console.log(text);
-      aiPrompt = createPrompt11(titre, text);
-      text = await asyncCallOpenAI(aiPrompt);
+  
+      for (let i = 0; i < 2; i++) {
+        separator();
+        console.log(text);
+        aiPrompt = createPrompt11(titre, text);
+        text = await asyncCallOpenAI(aiPrompt);
+      }
+    } else {
+      text = tableMatiere;
     }
 
     separator();
