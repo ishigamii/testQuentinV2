@@ -13,7 +13,10 @@ let globalTotalUsed = 0;
 // Configuration
 
 const SHOW_PROMPT = false;
-const USE_BACKGROUND_INFO = false;
+const USE_BACKGROUND_INFO = true;
+
+const options = [{ label: "Background info", value: USE_BACKGROUND_INFO },
+{ label: "Show prompt", value: SHOW_PROMPT }]
 
 const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
@@ -134,6 +137,10 @@ function getDeepth(subject) {
   return regexTable.exec(subject)[0].split(/\.|\)/).length
 }
 
+function isPromptYes(val) {
+  return ["oui", 'o', 'yes', 'y'].includes(val.toLowerCase());
+}
+
 async function asyncCallOpenAI(prompt) {
   if (SHOW_PROMPT) {
     separator();
@@ -169,6 +176,11 @@ async function asyncCallOpenAI(prompt) {
   const res = [];
   const saved = [];
 
+  const checkOptions = prompt(`Récap des options:\n\n${options.map((o) => `${o.label} : ${o.value}`).join('\n')}\n\nVoulez-vous continuer avec ces options ? (Réponse: Oui/Non)`);
+  if (!isPromptYes(checkOptions)) {
+    return;
+  }
+
   for (let i = 0; i < titres.length; i++) {
     console.log(`-- ${new Date().toLocaleString('fr')} --`)
     console.log(`-- Génération du contenu ${i + 1} sur ${titres.length} --`);
@@ -184,16 +196,16 @@ async function asyncCallOpenAI(prompt) {
       separator();
       console.log(text);
       separator();
+      
       const response = prompt("On continue avec ça ? (Réponse: Oui/Non/Combo)");
-
-      if (["oui", 'o', 'yes', 'y'].includes(response.toLowerCase())) {
+      if (isPromptYes(response)) {
         break;
       }
       if (["combo", 'c'].includes(response.toLowerCase())) {
         saved.push(text);
         fs.writeFileSync(DEFAULT_TABLE_CONTENT_PATH, saved.join('\n'));
         const combo = prompt("Pour combiner, modifiez le fichier tableContent.txt dans l'ordre que vous souhaitez (attention de bien garder les . derrières les chiffres ex: 1. / 1.1. / 1.2.3. ) puis répondez oui.");
-        if (["oui", 'o', 'yes', 'y'].includes(combo.toLowerCase())) {
+        if (isPromptYes(combo)) {
           text = fs.readFileSync(DEFAULT_TABLE_CONTENT_PATH, "utf8");
           break;
         }
@@ -287,6 +299,4 @@ async function asyncCallOpenAI(prompt) {
     fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH_OLD, backgroundInfo);
     fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH, "");
   }
-  
 }());
-
