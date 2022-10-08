@@ -257,6 +257,7 @@ async function asyncCallOpenAI(prompt) {
   if (EXTRACT_HTML) {
     extract = getTitlesFromFile();
     tableMatiere = getTableMatiere(extract);
+    extractFiltered = extract.filter((e) => e.tag !== 'H1')
 
     console.log(tableMatiere)
     separator();
@@ -343,7 +344,7 @@ async function asyncCallOpenAI(prompt) {
       separator();
       if (formatedSubject) {
         if (EXTRACT_HTML) {
-          backgroundInfo = extract[i].paragraph;
+          backgroundInfo = extractFiltered[i].paragraph;
         }
 
         aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
