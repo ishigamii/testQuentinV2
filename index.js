@@ -4,6 +4,7 @@ const fs = require('fs');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const { Configuration, OpenAIApi } = require("openai");
 const jsdom = require("jsdom");
+const fetch = require('node-fetch');
 
 moment.locale('fr-fr');
 
@@ -12,7 +13,7 @@ let globalTotalUsed = 0;
 
 // Configuration
 
-const SHOW_PROMPT = false;
+const SHOW_PROMPT = true;
 const EXTRACT_HTML = true;
 const USE_BACKGROUND_INFO = true || EXTRACT_HTML;
 
@@ -47,7 +48,7 @@ const createPrompt11 = (titre, outputPrompt1) => {
 }
 
 const createPrompt2 = (titre, outputPrompt11) => {
-  return `rédige une introduction jusqu'à 80 mots pour un article sur le sujet : ${titre}.`
+  return `rédige un court texte d'introduction jusqu'à 80 mots pour un article sur le sujet : ${titre}.`
 }
 
 const createPrompt3 = (titre, outputPrompt1) => {
@@ -57,7 +58,7 @@ const createPrompt3 = (titre, outputPrompt1) => {
 // Sujet étant les différents élements du prompt 1
 const createPrompt4 = (titre, sujet, level = 2) => {
   let background = USE_BACKGROUND_INFO && backgroundInfo ? `Background information : ${backgroundInfo}\n` : '';
-  return `${background}rédige un paragraphe ${sujet} très détaillée pour un article sur le sujet : ${titre}\nCommence par un <h${level}>${sujet}</h${level}>\najoute ensuite un texte d’introduction\n ajoute toujours des sous-titres <h${level + 1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français.`
+  return `${background}rédige un paragraphe ${sujet} très détaillée pour un article sur le sujet : ${titre}\nCommence par un <h${level}>${sujet}</h${level}>\najoute ensuite un texte d’introduction\najoute toujours des sous-titres <h${level + 1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français.`
 }
 
 const createPrompt5 = (titre, outputPrompt1) => {
@@ -167,23 +168,24 @@ function getTitlesFromFile() {
 }
 
 function getTableMatiere(extractArray) {
-  const lastIndex = [1, 0, 0];
-  return extractArray.map((e) => {
+  const lastIndex = [0, 0, 0];
+  return extractArray.filter((e) => e.tag !== 'H1').map((e) => {
     let index = "";
-    if (e.tag === 'H1') {
-      index = lastIndex[0];
-      lastIndex[1] = 1
-      lastIndex[2] = 1
-    }
     if (e.tag === 'H2') {
+      lastIndex[0]++
+      lastIndex[1] = 0
+      lastIndex[2] = 0
+      index = lastIndex[0];
+    }
+    if (e.tag === 'H3') {
       lastIndex[1]++
       lastIndex[2] = 0
       index = `${lastIndex[0]}.${lastIndex[1]}`;
     }
-    if (e.tag === 'H3') {
+    /*if (e.tag === 'H3') {
       lastIndex[2]++
       index = `${lastIndex[0]}.${lastIndex[1]}.${lastIndex[2]}`;
-    }
+    }*/
     return `${index}. ${e.title}`;
   }).join('\n');
 }
@@ -206,6 +208,12 @@ function getDeepth(subject) {
 
 function isPromptYes(val) {
   return ["oui", 'o', 'yes', 'y'].includes(val.toLowerCase());
+}
+
+async function asyncGetUrlHTML(url) {
+  const response = await fetch('https://www.biendecheznous.be/legumes/conservation/tomate');
+  const body = await response.text();
+  return body;
 }
 
 async function asyncCallOpenAI(prompt) {
