@@ -40,7 +40,7 @@ const DEFAULT_HTML_PATH = 'html.txt';
 // Prompts
 
 const createPrompt1 = (title) => {
-  return `rédige une table des matières très détaillée pour un article sur le sujet : ${title}\nNe pas prévoir une partie Introduction\nNe pas prévoir une partie Conclusion.`
+  return `rédige une table des matières très détaillée pour un article sur le sujet : ${titre}\nNe pas prévoir une partie Introduction\nNe pas prévoir une partie Conclusion.`
 }
 
 const createPrompt11 = (titre, outputPrompt1) => {
@@ -48,21 +48,32 @@ const createPrompt11 = (titre, outputPrompt1) => {
 }
 
 const createPrompt2 = (titre, outputPrompt11) => {
-  return `rédige un court texte d'introduction jusqu'à 80 mots pour un article sur le sujet : ${titre}.`
+  return `rédige une intro jusqu'à 80 mots pour le post de blog : ${titre}.`
 }
 
 const createPrompt3 = (titre, outputPrompt1) => {
-  return `rédige une meta description jusqu'à 30 mots pour un article sur le sujet : ${titre} dont la table des matières est : ${outputPrompt1}\nMettre un majuscule en début de phrase\nne pas dépasser les 155 caractères maximum\nutiliser la balise <meta name="description">.`
+  return `rédige une <meta description> jusqu'à 30 mots pour le post de blog : : ${titre}\nMettre un majuscule en début de phrase\nne pas dépasser les 155 caractères maximum.`
 }
 
-// Sujet étant les différents élements du prompt 1
+// Reformule background
+const createPrompt31 = (backgroundInfo) => {
+  return `Reformule ce texte en français :\n"${backgroundInfo}"\n\nTexte reformulé :`
+}
+
+// infos-clés du background reformulé
+const createPrompt311 = (backgroundInfo) => {
+  return `Quels sont les informations clés de ce texte: :\n"${backgroundInfo}"\n\nJusque 10 informations clés : 1.`
+}
+
+//Sujet étant les différents élements du prompt 1
 const createPrompt4 = (titre, sujet, level = 2) => {
-  let background = USE_BACKGROUND_INFO && backgroundInfo ? `Background information : ${backgroundInfo}\n` : '';
-  return `${background}rédige un paragraphe ${sujet} très détaillée pour un article sur le sujet : ${titre}\nCommence par un <h${level}>${sujet}</h${level}>\najoute ensuite un texte d’introduction\najoute toujours des sous-titres <h${level + 1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français.`
+  let background = USE_BACKGROUND_INFO && backgroundInfo ? `INFORMATIONS CLES : 1.${backgroundInfo}\n\n` : '';
+  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nutilise les INFORMATIONS CLES pour rédiger un paragraphe utile et passionnant sur le sujet ${sujet}\nutilise toujours des mots de liaisons\nn'ajoute pas de <h1>\nn'ajoute pas de <h2>\najoute un texte d’introduction\najoute toujours des sous-titres <h${level + 1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français\n
+PARAGRAPHE ${sujet} :`
 }
 
 const createPrompt5 = (titre, outputPrompt1) => {
-  return `rédige un texte de conclusion pour un article sur le sujet : ${titre} dont la table des matières est : ${outputPrompt1}.`
+  return `rédige un texte de conclusion pour un article sur le sujet : ${titre}.\nCONCLUSION : `
 }
 
 // OpenAI Config
@@ -210,6 +221,32 @@ function isPromptYes(val) {
   return ["oui", 'o', 'yes', 'y'].includes(val.toLowerCase());
 }
 
+function levenshteinDistance(str1 = '', str2 = '') {
+  const track = Array(str2.length + 1).fill(null).map(() =>
+    Array(str1.length + 1).fill(null));
+  for (let i = 0; i <= str1.length; i += 1) {
+    track[0][i] = i;
+  }
+  for (let j = 0; j <= str2.length; j += 1) {
+    track[j][0] = j;
+  }
+  for (let j = 1; j <= str2.length; j += 1) {
+    for (let i = 1; i <= str1.length; i += 1) {
+      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      track[j][i] = Math.min(
+        track[j][i - 1] + 1, // deletion
+        track[j - 1][i] + 1, // insertion
+        track[j - 1][i - 1] + indicator, // substitution
+      );
+    }
+  }
+  return track[str2.length][str1.length];
+};
+
+function levenshteinSimilarity(distance, str1, str2) {
+  return Math.ceil(((1-(distance/(Math.max(str1.length, str2.length)))) *100));
+}
+
 async function asyncGetUrlHTML(url) {
   const response = await fetch('https://www.biendecheznous.be/legumes/conservation/tomate');
   const body = await response.text();
@@ -229,7 +266,7 @@ async function asyncCallOpenAI(prompt) {
     temperature: 0.7,
     max_tokens: 3000,
     top_p: 1,
-    frequency_penalty: 0.2,
+    frequency_penalty: 0.4,
     presence_penalty: 0.2,
   });
 
@@ -253,6 +290,13 @@ async function asyncCallOpenAI(prompt) {
 
   let extract = [];
   let tableMatiere = "";
+  
+  /*
+  const str1 = 'hittingazeza';
+  const str2 = 'kitten';
+  const distanceLevenshtein = levenshteinDistance(str1, str2)
+  console.log(distanceLevenshtein, levenshteinSimilarity(distanceLevenshtein, str1, str2), "%");
+  */
 
   if (EXTRACT_HTML) {
     extract = getTitlesFromFile();
@@ -334,6 +378,9 @@ async function asyncCallOpenAI(prompt) {
     console.log(subjects)
     const subjectsData = []
     const deepthParent = {};
+
+    let str1 = "";
+    let str2 = "";
     for (let i = 0; i < subjects.length; i++) {
       separator();
       const deepth = getDeepth(subjects[i]);
@@ -345,6 +392,14 @@ async function asyncCallOpenAI(prompt) {
       if (formatedSubject) {
         if (EXTRACT_HTML) {
           backgroundInfo = extractFiltered[i].paragraph;
+          if (backgroundInfo) {
+            aiPrompt = createPrompt31(backgroundInfo);
+            backgroundInfo = await asyncCallOpenAI(aiPrompt);
+          }
+          if (backgroundInfo) {
+            aiPrompt = createPrompt311(backgroundInfo);
+            backgroundInfo = await asyncCallOpenAI(aiPrompt);
+          }
         }
 
         aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
@@ -352,6 +407,20 @@ async function asyncCallOpenAI(prompt) {
           aiPrompt = createPrompt2(formatedSubject);
         }
         let sectionText = await asyncCallOpenAI(aiPrompt);
+
+        // Levenshtein
+        str1 = extractFiltered[i].paragraph;
+        str2 = sectionText;
+        const distanceLevenshtein = levenshteinDistance(str1, str2);
+        const percentLevenshtein = levenshteinSimilarity(distanceLevenshtein, str1, str2);
+        separator();
+        console.log(str1);
+        console.log("\nVS\n");
+        console.log(str2);
+        separator();
+        console.log("Résultat Levenshtein :",distanceLevenshtein, `${percentLevenshtein}%`);
+        separator();
+        
         if (!sectionText.includes(`<h${deepth}>`)) {
           sectionText = `<h${deepth}>${formatedSubject}</h${deepth}>\n\n${sectionText}`
         }
