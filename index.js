@@ -16,10 +16,14 @@ let globalTotalUsed = 0;
 const SHOW_PROMPT = true;
 const EXTRACT_HTML = true;
 const USE_BACKGROUND_INFO = true || EXTRACT_HTML;
+const LEVENSHTEIN_PERCENT = 65; // percent max otherwise we reload
+const LEVENSHTEIN_MAX_RETRY = 2; // number max of retry 
 
 const options = [{ label: "Background info", value: USE_BACKGROUND_INFO },
 { label: "Extract from html", value: EXTRACT_HTML },
-{ label: "Show prompt", value: SHOW_PROMPT }]
+{ label: "Show prompt", value: SHOW_PROMPT },
+{ label: "Levelshtein percent", value: LEVENSHTEIN_PERCENT },
+{ label: "Levelshtein max retry", value: LEVENSHTEIN_MAX_RETRY }]
 
 const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
@@ -57,19 +61,27 @@ const createPrompt3 = (titre, outputPrompt1) => {
 
 // Reformule background
 const createPrompt31 = (backgroundInfo) => {
-  return `Reformule ce texte en français :\n"${backgroundInfo}"\n\nTexte reformulé :`
+  return `Reformule complètement ce texte en français :\n"${backgroundInfo}"\n\nTexte reformulé :`
 }
 
 // infos-clés du background reformulé
 const createPrompt311 = (backgroundInfo) => {
-  return `Quels sont les informations clés de ce texte: :\n"${backgroundInfo}"\n\nJusque 10 informations clés : 1.`
+  return `Quels sont les informations clés de ce texte: :\n"${backgroundInfo}"\n\nJusque 10 informations clés : -`
 }
 
 //Sujet étant les différents élements du prompt 1
+//VERSION SANS TEXTE INTRO + SOUS TITRES
 const createPrompt4 = (titre, sujet, level = 2) => {
-  let background = USE_BACKGROUND_INFO && backgroundInfo ? `INFORMATIONS CLES : 1.${backgroundInfo}\n\n` : '';
-  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nutilise les INFORMATIONS CLES pour rédiger un paragraphe utile et passionnant sur le sujet ${sujet}\nutilise toujours des mots de liaisons\nn'ajoute pas de <h1>\nn'ajoute pas de <h2>\najoute un texte d’introduction\najoute toujours des sous-titres <h${level + 1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français\n
-PARAGRAPHE ${sujet} :`
+  let background = USE_BACKGROUND_INFO && backgroundInfo ? `INFORMATIONS CLES : -${backgroundInfo}\n\n` : '';
+  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nrédige un paragraphe engageant et très détaillé\nutilise toujours des mots de liaisons\najoute des transitions entre les phrases\nn'ajoute pas de <h1>\ntraduire les mots anglais en français\n
+PARAGRAPHE ENGAGEANT :`
+}
+
+//VERSION AVEC TEXTE INTRO + SOUS TITRES
+const createPrompt41 = (titre, sujet, level = 2) => {
+  let background = USE_BACKGROUND_INFO && backgroundInfo ? `INFORMATIONS CLES : -${backgroundInfo}\n\n` : '';
+  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nrédige un paragraphe engageant et très détaillé\nutilise toujours des mots de liaisons\najoute des transitions entre les phrases\nn'ajoute pas de <h1>\nn'ajoute pas de <h2>\najoute un texte d’introduction\najoute toujours des sous-titres <h${level + 1}>\nutilise toujours des balises <p>\ntraduire les mots anglais en français\n
+PARAGRAPHE ENGAGEANT :`
 }
 
 const createPrompt5 = (titre, outputPrompt1) => {
@@ -84,7 +96,6 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 // CSV
-
 const titles = [];
 const crs = fs.createReadStream('sujets.csv')
   .pipe(csv())
@@ -101,6 +112,7 @@ const csvEnd = new Promise(function(resolve, reject) {
 
 const csvHeader = [
   { id: 'title', title: 'Title' },
+  { id: 'description', title: 'Description' },
   { id: 'full', title: 'Full Text' },
   { id: 'token', title: 'Token Used' },
 ];
@@ -120,6 +132,7 @@ const csvErrorsWriterAppend = createCsvWriter({
   path: 'errors.csv',
   header: [
     { id: 'title', title: 'Title' },
+    { id: 'description', title: 'Description' },
     { id: 'full', title: 'Full Text' },
     { id: 'regex', title: 'Regex Used' },
   ],
@@ -150,10 +163,10 @@ function getTitlesFromFile() {
       //console.log(`${target}:`);
       //console.log(matches.map((e) => e.textContent).filter((e) => e?.trim()).join('\n'));
       res = [...res, ...matches.map((e) => {
-        //console.log("======")
-        //console.log(e.textContent)
-        //console.log(html.indexOf(e.innerHTML))
-        //console.log("======")
+        /*console.log("======")
+        console.log(e.textContent)
+        console.log(html.indexOf(e.innerHTML))
+        console.log("======")*/
         let next = e.nextElementSibling
         let text = ''
         while (next && !next.tagName.startsWith('H')) {
@@ -170,10 +183,10 @@ function getTitlesFromFile() {
           next = next.nextElementSibling;
         }
         //console.log(text)
-        return { position: html.indexOf(e.innerHTML), title: e.textContent, tag: e.tagName, paragraph: text }
+        return { position: html.indexOf(e.innerHTML), title: removeEmoji(e.textContent), tag: e.tagName, paragraph: removeEmoji(text) }
       })];
     }
-    return res.filter((e) => e.title?.trim() && e.paragraph?.trim()).sort((a, b) => a.position - b.position);
+    return res.filter((e) => e.title?.trim() || e.paragraph?.trim()).sort((a, b) => a.position - b.position);
   }
   return null;
 }
@@ -244,7 +257,11 @@ function levenshteinDistance(str1 = '', str2 = '') {
 };
 
 function levenshteinSimilarity(distance, str1, str2) {
-  return Math.ceil(((1-(distance/(Math.max(str1.length, str2.length)))) *100));
+  return Math.ceil(((1 - (distance / (Math.max(str1.length, str2.length)))) * 100));
+}
+
+function removeEmoji(text) {
+  return text.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '');
 }
 
 async function asyncGetUrlHTML(url) {
@@ -290,13 +307,7 @@ async function asyncCallOpenAI(prompt) {
 
   let extract = [];
   let tableMatiere = "";
-  
-  /*
-  const str1 = 'hittingazeza';
-  const str2 = 'kitten';
-  const distanceLevenshtein = levenshteinDistance(str1, str2)
-  console.log(distanceLevenshtein, levenshteinSimilarity(distanceLevenshtein, str1, str2), "%");
-  */
+  let extractFiltered = [];
 
   if (EXTRACT_HTML) {
     extract = getTitlesFromFile();
@@ -402,25 +413,43 @@ async function asyncCallOpenAI(prompt) {
           }
         }
 
-        aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
-        if (deepthNext > deepth) {
-          aiPrompt = createPrompt2(formatedSubject);
-        }
-        let sectionText = await asyncCallOpenAI(aiPrompt);
+        let retry = 0;
+        let distanceLevenshtein = 0;
+        let percentLevenshtein = 0;
+        let sectionText = "";
+        let best = { percent: 100, text: '' };
 
-        // Levenshtein
-        str1 = extractFiltered[i].paragraph;
-        str2 = sectionText;
-        const distanceLevenshtein = levenshteinDistance(str1, str2);
-        const percentLevenshtein = levenshteinSimilarity(distanceLevenshtein, str1, str2);
-        separator();
-        console.log(str1);
-        console.log("\nVS\n");
-        console.log(str2);
-        separator();
-        console.log("Résultat Levenshtein :",distanceLevenshtein, `${percentLevenshtein}%`);
-        separator();
-        
+        do {
+          aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
+          if (deepthNext > deepth) {
+            aiPrompt = createPrompt2(formatedSubject);
+          }
+          sectionText = await asyncCallOpenAI(aiPrompt);
+
+          // Levenshtein
+          str1 = extractFiltered[i].paragraph;
+          str2 = sectionText;
+          distanceLevenshtein = levenshteinDistance(str1, str2);
+          percentLevenshtein = levenshteinSimilarity(distanceLevenshtein, str1, str2);
+          separator();
+          console.log(str1);
+          console.log("\nVS\n");
+          console.log(str2);
+          separator();
+          console.log("Résultat Levenshtein :", distanceLevenshtein, `${percentLevenshtein}%`);
+          separator();
+
+          // Compare similarity percent to save the new best
+          if (best.percent > percentLevenshtein) {
+            best = { percent: percentLevenshtein, text: sectionText };
+          }
+          retry++;
+        } while (percentLevenshtein > LEVENSHTEIN_PERCENT && retry <= LEVENSHTEIN_MAX_RETRY);
+
+        if (best.text) {
+          sectionText = best.text;
+        }
+
         if (!sectionText.includes(`<h${deepth}>`)) {
           sectionText = `<h${deepth}>${formatedSubject}</h${deepth}>\n\n${sectionText}`
         }
@@ -439,13 +468,15 @@ async function asyncCallOpenAI(prompt) {
     separator();
 
     separator();
-    const concat = [metaDescriptionText, introText, tableMatsFinal, subjectsData.join('\n'), conclusionText].join('\n')
+    const concat = [introText, subjectsData.join('\n'), conclusionText].join('\n')
     separator();
 
     const datas = {
       title: titre,
+      description: metaDescriptionText,
       full: concat,
       token: totalUsed,
+      //tableMatiere: tableMatsFinal,
     }
 
     res.push(datas)
@@ -465,3 +496,29 @@ async function asyncCallOpenAI(prompt) {
     fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH, "");
   }
 }());
+
+/*
+//YOUTUBE API SEARCH 
+
+const youtubeSearch = "test"
+const youTubeUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${youtubeSearch}&key=AIzaSyApGYgQu8pTOjuxYHE8xk1ufAY4-kmqbRg`;
+
+//JSON placeholder is a simple placeholder REST API that returns JSON
+fetch(youTubeUrl)
+    .then(response=> {
+        //response.json() turns the response objects body into JSON 
+        //response.json() returns a JS promise
+        //Use response.text() to turn your response object to text
+        return response.json()
+    })
+    .then(data=> {
+        //We have successfully made a GET request!
+        //Log the data to the console:
+        console.log(JSON.stringify(data, null, 2));
+    })
+
+
+//get "videoId": "FKdctsQ1v7U"
+
+//url de la video: https://www.youtube.com/watch?v=${videoId}
+*/
