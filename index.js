@@ -3,8 +3,10 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const { Configuration, OpenAIApi } = require("openai");
-const jsdom = require("jsdom");
 const fetch = require('node-fetch');
+
+const stringUtils = require('./stringUtils');
+const htmlUtils = require('./htmlUtils');
 
 moment.locale('fr-fr');
 
@@ -15,12 +17,14 @@ let globalTotalUsed = 0;
 
 const SHOW_PROMPT = true;
 const EXTRACT_HTML = false;
-const USE_BACKGROUND_INFO = false || EXTRACT_HTML;
+const EXTRACT_HTMLS = true;
+const USE_BACKGROUND_INFO = false || EXTRACT_HTML || EXTRACT_HTMLS;
 const LEVENSHTEIN_PERCENT = 65; // percent max otherwise we reload
 const LEVENSHTEIN_MAX_RETRY = 2; // number max of retry 
 
 const options = [{ label: "Background info", value: USE_BACKGROUND_INFO },
 { label: "Extract from html", value: EXTRACT_HTML },
+{ label: "Extract from csv htmls", value: EXTRACT_HTMLS },
 { label: "Show prompt", value: SHOW_PROMPT },
 { label: "Levelshtein percent", value: LEVENSHTEIN_PERCENT },
 { label: "Levelshtein max retry", value: LEVENSHTEIN_MAX_RETRY }]
@@ -40,6 +44,7 @@ let backgroundInfo = fs.readFileSync(DEFAULT_BACKGROUND_INFO_PATH, "utf8")
 
 // HTML file base
 const DEFAULT_HTML_PATH = 'html.txt';
+const DEFAULT_HTMLS_PATH = 'htmls.csv';
 
 // Prompts
 
@@ -48,7 +53,7 @@ const createPrompt1 = (titre) => {
 }
 
 const createPrompt11 = (titre, outputPrompt1) => {
-  return `Pour un article sur le sujet : ${titre} Repete cette table des matières : ${outputPrompt1}\nRéfléchis à des améliorations qui pourraient être apportées à ce sommaire pour qu'il soit plus complet et plus efficace.`
+  return `Pour un article sur le sujet: ${titre} Repete cette table des matières: ${outputPrompt1} \nRéfléchis à des améliorations qui pourraient être apportées à ce sommaire pour qu'il soit plus complet et plus efficace.`
 }
 
 const createPrompt2 = (titre, outputPrompt11) => {
@@ -88,6 +93,12 @@ const createPrompt5 = (titre, outputPrompt1) => {
   return `rédige un texte de conclusion pour un article sur le sujet : ${titre}.\nCONCLUSION : `
 }
 
+//identifie le mot-clé principal utilisé pour la recherche d'image
+/*
+const createPrompt6 = (titre) => {
+  return `IDENTIFIE LE MOT PRINCIPAL DE CE TITRE : ${titre}\ntraduit en anglais\n\nMot principal en anglais : `
+}*/
+
 // OpenAI Config
 
 const configuration = new Configuration({
@@ -109,6 +120,21 @@ const csvEnd = new Promise(function(resolve, reject) {
     resolve(titles)
   });
 });
+
+const urls = [];
+const csvHtmls = fs.createReadStream(DEFAULT_HTMLS_PATH)
+  .pipe(csv())
+  .on('data', (row) => {
+    urls.push({ ...row });
+  })
+
+const csvHtmlsEnd = new Promise(function(resolve, reject) {
+  csvHtmls.on('end', () => {
+    console.log('CSV file successfully processed');
+    resolve(urls);
+  });
+});
+
 
 const csvHeader = [
   { id: 'title', title: 'Title' },
@@ -139,81 +165,6 @@ const csvErrorsWriterAppend = createCsvWriter({
   append: true,
 });
 
-
-function removeTagFromHtml(html) {
-  if (html && !!html.trim()) {
-    const { JSDOM } = jsdom;
-    const document = new JSDOM("").window.document;
-    let div = document.createElement("div");
-    div.innerHTML = html.trim();
-    return div.textContent || div.innerText || "";
-  }
-  return "";
-}
-
-function getTitlesFromFile() {
-  const html = fs.readFileSync(DEFAULT_HTML_PATH, "utf8")
-  if (html && !!html.trim()) {
-    const { JSDOM } = jsdom;
-    const document = new JSDOM(html).window.document;
-    let res = [];
-    for (let i = 1; i < 4; i++) {
-      const target = `h${i}`;
-      const matches = Array.from(document.querySelectorAll(target));
-      //console.log(`${target}:`);
-      //console.log(matches.map((e) => e.textContent).filter((e) => e?.trim()).join('\n'));
-      res = [...res, ...matches.map((e) => {
-        /*console.log("======")
-        console.log(e.textContent)
-        console.log(html.indexOf(e.innerHTML))
-        console.log("======")*/
-        let next = e.nextElementSibling
-        let text = ''
-        while (next && !next.tagName.startsWith('H')) {
-          if (next?.innerHTML.match(/<h\d>/)) {
-            const div = document.createElement("div");
-            div.innerHTML = next?.innerHTML.split(/<h\d>/)[0]
-            text += div.textContent;
-            break;
-          } else {
-            //console.log(next?.textContent)
-            //console.log("===", next.tagName)
-            text += next?.textContent;
-          }
-          next = next.nextElementSibling;
-        }
-        //console.log(text)
-        return { position: html.indexOf(e.innerHTML), title: removeEmoji(e.textContent), tag: e.tagName, paragraph: removeEmoji(text) }
-      })];
-    }
-    return res.filter((e) => e.title?.trim() || e.paragraph?.trim()).sort((a, b) => a.position - b.position);
-  }
-  return null;
-}
-
-function getTableMatiere(extractArray) {
-  const lastIndex = [0, 0, 0];
-  return extractArray.filter((e) => e.tag !== 'H1').map((e) => {
-    let index = "";
-    if (e.tag === 'H2') {
-      lastIndex[0]++
-      lastIndex[1] = 0
-      lastIndex[2] = 0
-      index = lastIndex[0];
-    }
-    if (e.tag === 'H3') {
-      lastIndex[1]++
-      lastIndex[2] = 0
-      index = `${lastIndex[0]}.${lastIndex[1]}`;
-    }
-    /*if (e.tag === 'H3') {
-      lastIndex[2]++
-      index = `${lastIndex[0]}.${lastIndex[1]}.${lastIndex[2]}`;
-    }*/
-    return `${index}. ${e.title}`;
-  }).join('\n');
-}
-
 function addHours(date = new Date(), numOfHours = intervaleHour) {
   date.setTime(date.getTime() + numOfHours * 60 * 60 * 1000);
   return date;
@@ -234,38 +185,8 @@ function isPromptYes(val) {
   return ["oui", 'o', 'yes', 'y'].includes(val.toLowerCase());
 }
 
-function levenshteinDistance(str1 = '', str2 = '') {
-  const track = Array(str2.length + 1).fill(null).map(() =>
-    Array(str1.length + 1).fill(null));
-  for (let i = 0; i <= str1.length; i += 1) {
-    track[0][i] = i;
-  }
-  for (let j = 0; j <= str2.length; j += 1) {
-    track[j][0] = j;
-  }
-  for (let j = 1; j <= str2.length; j += 1) {
-    for (let i = 1; i <= str1.length; i += 1) {
-      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      track[j][i] = Math.min(
-        track[j][i - 1] + 1, // deletion
-        track[j - 1][i] + 1, // insertion
-        track[j - 1][i - 1] + indicator, // substitution
-      );
-    }
-  }
-  return track[str2.length][str1.length];
-};
-
-function levenshteinSimilarity(distance, str1, str2) {
-  return Math.ceil(((1 - (distance / (Math.max(str1.length, str2.length)))) * 100));
-}
-
-function removeEmoji(text) {
-  return text.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '');
-}
-
 async function asyncGetUrlHTML(url) {
-  const response = await fetch('https://www.biendecheznous.be/legumes/conservation/tomate');
+  const response = await fetch(url);
   const body = await response.text();
   return body;
 }
@@ -308,192 +229,207 @@ async function asyncCallOpenAI(prompt) {
   let extract = [];
   let tableMatiere = "";
   let extractFiltered = [];
+  let websites = [];
 
-  if (EXTRACT_HTML) {
-    extract = getTitlesFromFile();
-    tableMatiere = getTableMatiere(extract);
-    extractFiltered = extract.filter((e) => e.tag !== 'H1')
-
-    console.log(tableMatiere)
+  if (EXTRACT_HTMLS) {
+    let htmls = await csvHtmlsEnd;
+    websites = await Promise.all(
+      htmls.map(async ({ url }) => {
+        const res = await asyncGetUrlHTML(url)
+        return { html: res, url: url }
+      }));
+    console.log(websites);
     separator();
   }
 
-  const checkOptions = prompt(`Récap des options:\n\n${options.map((o) => `${o.label} : ${o.value}`).join('\n')}\n\nVoulez-vous continuer avec ces options ? (Réponse: Oui/Non)`);
-  if (!isPromptYes(checkOptions)) {
-    return;
-  }
+  for (let j = 0; j < Math.max(1, websites.length); j++) {
+    if (EXTRACT_HTML || EXTRACT_HTMLS) {
+      let html = EXTRACT_HTML ? fs.readFileSync(DEFAULT_HTML_PATH, "utf8") : websites[j]?.html;
+      extract = htmlUtils.getTitlesFromHTML(html);
+      tableMatiere = htmlUtils.getTableMatiere(extract);
+      extractFiltered = extract.filter((e) => e.tag !== 'H1')
 
-  for (let i = 0; i < titres.length; i++) {
-    console.log(`-- ${new Date().toLocaleString('fr')} --`)
-    console.log(`-- Génération du contenu ${i + 1} sur ${titres.length} --`);
-    let { title: titre } = titres[i];
+      console.log(tableMatiere)
+      separator();
+    }
 
-    let text = "";
-    if (!EXTRACT_HTML) {
-      let aiPrompt = createPrompt1(titre);
+    const checkOptions = prompt(`Récap des options:\n\n${options.map((o) => `${o.label} : ${o.value}`).join('\n')}\n\nVoulez-vous continuer avec ces options ? (Réponse: Oui/Non)`);
+    if (!isPromptYes(checkOptions)) {
+      return;
+    }
 
-      while (true) {
-        text = await asyncCallOpenAI(aiPrompt);
-        separator();
-        console.log("Ancienne génération\n", saved.join('\n'));
-        separator();
-        console.log(text);
-        separator();
+    for (let i = 0; i < titres.length; i++) {
+      console.log(`-- ${new Date().toLocaleString('fr')} --`)
+      console.log(`-- Génération du contenu ${i + 1} sur ${titres.length} --`);
+      let { title: titre } = titres[i];
 
-        const response = prompt("On continue avec ça ? (Réponse: Oui/Non/Combo)");
-        if (isPromptYes(response)) {
-          break;
-        }
-        if (["combo", 'c'].includes(response.toLowerCase())) {
-          saved.push(text);
-          fs.writeFileSync(DEFAULT_TABLE_CONTENT_PATH, saved.join('\n'));
-          const combo = prompt("Pour combiner, modifiez le fichier tableContent.txt dans l'ordre que vous souhaitez (attention de bien garder les . derrières les chiffres ex: 1. / 1.1. / 1.2.3. ) puis répondez oui.");
-          if (isPromptYes(combo)) {
-            text = fs.readFileSync(DEFAULT_TABLE_CONTENT_PATH, "utf8");
+      let text = "";
+      if (!EXTRACT_HTML && !EXTRACT_HTMLS) {
+        let aiPrompt = createPrompt1(titre);
+
+        while (true) {
+          text = await asyncCallOpenAI(aiPrompt);
+          separator();
+          console.log("Ancienne génération\n", saved.join('\n'));
+          separator();
+          console.log(text);
+          separator();
+
+          const response = prompt("On continue avec ça ? (Réponse: Oui/Non/Combo)");
+          if (isPromptYes(response)) {
             break;
           }
+          if (["combo", 'c'].includes(response.toLowerCase())) {
+            saved.push(text);
+            fs.writeFileSync(DEFAULT_TABLE_CONTENT_PATH, saved.join('\n'));
+            const combo = prompt("Pour combiner, modifiez le fichier tableContent.txt dans l'ordre que vous souhaitez (attention de bien garder les . derrières les chiffres ex: 1. / 1.1. / 1.2.3. ) puis répondez oui.");
+            if (isPromptYes(combo)) {
+              text = fs.readFileSync(DEFAULT_TABLE_CONTENT_PATH, "utf8");
+              break;
+            }
+          }
+          saved.push(text);
         }
-        saved.push(text);
+
+        for (let i = 0; i < 2; i++) {
+          separator();
+          console.log(text);
+          aiPrompt = createPrompt11(titre, text);
+          text = await asyncCallOpenAI(aiPrompt);
+        }
+      } else {
+        titre = extract[0].title;
+        text = tableMatiere;
       }
 
-      for (let i = 0; i < 2; i++) {
+      separator();
+      let tableMatsFinal = text.replace("Table des matières", '').replaceAll("\n\n", '\n')
+      console.log(tableMatsFinal);
+
+      separator();
+      aiPrompt = createPrompt2(titre, tableMatsFinal);
+      const introText = await asyncCallOpenAI(aiPrompt);
+      console.log("introText")
+      console.log(introText)
+      separator();
+
+      separator();
+      aiPrompt = createPrompt3(titre, tableMatsFinal);
+      const metaDescriptionText = await asyncCallOpenAI(aiPrompt);
+      console.log("metaDescriptionText")
+      console.log(metaDescriptionText)
+      separator();
+
+      const subjects = tableMatsFinal.split('\n').map(t => t.trim()).filter(t => t);
+      console.log(subjects)
+      const subjectsData = []
+      const deepthParent = {};
+
+      let str1 = "";
+      let str2 = "";
+      for (let i = 0; i < subjects.length; i++) {
         separator();
-        console.log(text);
-        aiPrompt = createPrompt11(titre, text);
-        text = await asyncCallOpenAI(aiPrompt);
+        const deepth = getDeepth(subjects[i]);
+        const deepthNext = getDeepth(subjects[i + 1]);
+        const formatedSubject = subjects[i].replace(regexTable, "")
+        deepthParent[deepth] = formatedSubject;
+        console.log(formatedSubject)
+        separator();
+        if (formatedSubject) {
+          if (EXTRACT_HTML || EXTRACT_HTMLS) {
+            backgroundInfo = extractFiltered[i].paragraph;
+            if (backgroundInfo) {
+              aiPrompt = createPrompt31(backgroundInfo);
+              backgroundInfo = await asyncCallOpenAI(aiPrompt);
+            }
+            if (backgroundInfo) {
+              aiPrompt = createPrompt311(backgroundInfo);
+              backgroundInfo = await asyncCallOpenAI(aiPrompt);
+            }
+          }
+
+          let retry = 0;
+          let distanceLevenshtein = 0;
+          let percentLevenshtein = 0;
+          let sectionText = "";
+          let best = { percent: 100, text: '' };
+
+          do {
+            aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
+            if (deepthNext > deepth) {
+              aiPrompt = createPrompt2(formatedSubject);
+            }
+            sectionText = await asyncCallOpenAI(aiPrompt);
+
+            // Levenshtein
+            str1 = extractFiltered[i].paragraph;
+            str2 = sectionText;
+            distanceLevenshtein = stringUtils.levenshteinDistance(str1, str2);
+            percentLevenshtein = stringUtils.levenshteinSimilarity(distanceLevenshtein, str1, str2);
+            separator();
+            console.log(str1);
+            console.log("\nVS\n");
+            console.log(str2);
+            separator();
+            console.log("Résultat Levenshtein :", distanceLevenshtein, `${percentLevenshtein}%`);
+            separator();
+
+            // Compare similarity percent to save the new best
+            if (best.percent > percentLevenshtein) {
+              best = { percent: percentLevenshtein, text: sectionText };
+            }
+            retry++;
+          } while (percentLevenshtein > LEVENSHTEIN_PERCENT && retry <= LEVENSHTEIN_MAX_RETRY);
+
+          if (best.text) {
+            sectionText = best.text;
+          }
+
+          if (!sectionText.includes(`<h${deepth}>`)) {
+            sectionText = `<h${deepth}>${formatedSubject}</h${deepth}>\n\n${sectionText}`
+          }
+          console.log(sectionText)
+          subjectsData.push(sectionText);
+        }
       }
-    } else {
-      titre = extract[0].title;
-      text = tableMatiere;
-    }
 
-    separator();
-    let tableMatsFinal = text.replace("Table des matières", '').replaceAll("\n\n", '\n')
-    console.log(tableMatsFinal);
+      //console.log(subjectsData)
 
-    separator();
-    aiPrompt = createPrompt2(titre, tableMatsFinal);
-    const introText = await asyncCallOpenAI(aiPrompt);
-    console.log("introText")
-    console.log(introText)
-    separator();
-
-    separator();
-    aiPrompt = createPrompt3(titre, tableMatsFinal);
-    const metaDescriptionText = await asyncCallOpenAI(aiPrompt);
-    console.log("metaDescriptionText")
-    console.log(metaDescriptionText)
-    separator();
-
-    const subjects = tableMatsFinal.split('\n').map(t => t.trim()).filter(t => t);
-    console.log(subjects)
-    const subjectsData = []
-    const deepthParent = {};
-
-    let str1 = "";
-    let str2 = "";
-    for (let i = 0; i < subjects.length; i++) {
       separator();
-      const deepth = getDeepth(subjects[i]);
-      const deepthNext = getDeepth(subjects[i + 1]);
-      const formatedSubject = subjects[i].replace(regexTable, "")
-      deepthParent[deepth] = formatedSubject;
-      console.log(formatedSubject)
+      aiPrompt = createPrompt5(titre, tableMatsFinal);
+      const conclusionText = await asyncCallOpenAI(aiPrompt);
+      console.log("conclusionText")
+      console.log(conclusionText)
       separator();
-      if (formatedSubject) {
-        if (EXTRACT_HTML) {
-          backgroundInfo = extractFiltered[i].paragraph;
-          if (backgroundInfo) {
-            aiPrompt = createPrompt31(backgroundInfo);
-            backgroundInfo = await asyncCallOpenAI(aiPrompt);
-          }
-          if (backgroundInfo) {
-            aiPrompt = createPrompt311(backgroundInfo);
-            backgroundInfo = await asyncCallOpenAI(aiPrompt);
-          }
-        }
 
-        let retry = 0;
-        let distanceLevenshtein = 0;
-        let percentLevenshtein = 0;
-        let sectionText = "";
-        let best = { percent: 100, text: '' };
+      separator();
+      const concat = [introText, subjectsData.join('\n'), conclusionText].join('\n')
+      separator();
 
-        do {
-          aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
-          if (deepthNext > deepth) {
-            aiPrompt = createPrompt2(formatedSubject);
-          }
-          sectionText = await asyncCallOpenAI(aiPrompt);
-
-          // Levenshtein
-          str1 = extractFiltered[i].paragraph;
-          str2 = sectionText;
-          distanceLevenshtein = levenshteinDistance(str1, str2);
-          percentLevenshtein = levenshteinSimilarity(distanceLevenshtein, str1, str2);
-          separator();
-          console.log(str1);
-          console.log("\nVS\n");
-          console.log(str2);
-          separator();
-          console.log("Résultat Levenshtein :", distanceLevenshtein, `${percentLevenshtein}%`);
-          separator();
-
-          // Compare similarity percent to save the new best
-          if (best.percent > percentLevenshtein) {
-            best = { percent: percentLevenshtein, text: sectionText };
-          }
-          retry++;
-        } while (percentLevenshtein > LEVENSHTEIN_PERCENT && retry <= LEVENSHTEIN_MAX_RETRY);
-
-        if (best.text) {
-          sectionText = best.text;
-        }
-
-        if (!sectionText.includes(`<h${deepth}>`)) {
-          sectionText = `<h${deepth}>${formatedSubject}</h${deepth}>\n\n${sectionText}`
-        }
-        console.log(sectionText)
-        subjectsData.push(sectionText);
+      const datas = {
+        title: titre,
+        description: metaDescriptionText,
+        full: concat,
+        token: totalUsed,
+        //tableMatiere: tableMatsFinal,
       }
+
+      res.push(datas)
+      csvWriterAppend.writeRecords([datas])
+
+      globalTotalUsed += totalUsed;
+      totalUsed = 0;
     }
-
-    //console.log(subjectsData)
-
+    console.log(`Total tokens used: ${globalTotalUsed}`);
     separator();
-    aiPrompt = createPrompt5(titre, tableMatsFinal);
-    const conclusionText = await asyncCallOpenAI(aiPrompt);
-    console.log("conclusionText")
-    console.log(conclusionText)
-    separator();
+    csvWriter
+      .writeRecords(res)
+      .then(() => console.log('The CSV file was written successfully'));
 
-    separator();
-    const concat = [introText, subjectsData.join('\n'), conclusionText].join('\n')
-    separator();
-
-    const datas = {
-      title: titre,
-      description: metaDescriptionText,
-      full: concat,
-      token: totalUsed,
-      //tableMatiere: tableMatsFinal,
+    if (USE_BACKGROUND_INFO) {
+      fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH_OLD, backgroundInfo);
+      fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH, "");
     }
-
-    res.push(datas)
-    csvWriterAppend.writeRecords([datas])
-
-    globalTotalUsed += totalUsed;
-    totalUsed = 0;
-  }
-  console.log(`Total tokens used: ${globalTotalUsed}`);
-  separator();
-  csvWriter
-    .writeRecords(res)
-    .then(() => console.log('The CSV file was written successfully'));
-
-  if (USE_BACKGROUND_INFO) {
-    fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH_OLD, backgroundInfo);
-    fs.writeFileSync(DEFAULT_BACKGROUND_INFO_PATH, "");
   }
 }());
 
