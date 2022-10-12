@@ -14,8 +14,8 @@ let globalTotalUsed = 0;
 // Configuration
 
 const SHOW_PROMPT = true;
-const EXTRACT_HTML = true;
-const USE_BACKGROUND_INFO = true || EXTRACT_HTML;
+const EXTRACT_HTML = false;
+const USE_BACKGROUND_INFO = false || EXTRACT_HTML;
 const LEVENSHTEIN_PERCENT = 65; // percent max otherwise we reload
 const LEVENSHTEIN_MAX_RETRY = 2; // number max of retry 
 
@@ -43,7 +43,7 @@ const DEFAULT_HTML_PATH = 'html.txt';
 
 // Prompts
 
-const createPrompt1 = (title) => {
+const createPrompt1 = (titre) => {
   return `rédige une table des matières très détaillée pour un article sur le sujet : ${titre}\nNe pas prévoir une partie Introduction\nNe pas prévoir une partie Conclusion.`
 }
 
@@ -498,13 +498,9 @@ async function asyncCallOpenAI(prompt) {
 }());
 
 /*
-//YOUTUBE API SEARCH 
-
-const youtubeSearch = "test"
-const youTubeUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${youtubeSearch}&key=AIzaSyApGYgQu8pTOjuxYHE8xk1ufAY4-kmqbRg`;
 
 //JSON placeholder is a simple placeholder REST API that returns JSON
-fetch(youTubeUrl)
+fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${titre}&key=AIzaSyAsz6fIGOe4LJsWmGXK6-np7gfpfqsfCdY`)
     .then(response=> {
         //response.json() turns the response objects body into JSON 
         //response.json() returns a JS promise
@@ -514,11 +510,12 @@ fetch(youTubeUrl)
     .then(data=> {
         //We have successfully made a GET request!
         //Log the data to the console:
-        console.log(JSON.stringify(data, null, 2));
+        //resTxt.innerText = JSON.stringify(data.items[1].id.videoId, null, 2);
+        //create variable wiht id
+        let videoid = JSON.stringify(data.items[0].id.videoId).replaceAll("\"", "");
+        resTxt.innerText = videoid
+        let youtubeurl = `https://www.youtube.com/watch?v=${videoid}`
+        resTxt.innerText = youtubeurl
     })
 
-
-//get "videoId": "FKdctsQ1v7U"
-
-//url de la video: https://www.youtube.com/watch?v=${videoId}
 */
