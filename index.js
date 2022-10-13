@@ -234,9 +234,9 @@ async function asyncCallOpenAI(prompt) {
   if (EXTRACT_HTMLS) {
     let htmls = await csvHtmlsEnd;
     websites = await Promise.all(
-      htmls.map(async ({ url }) => {
+      htmls.map(async ({ url, stop }) => {
         const res = await asyncGetUrlHTML(url)
-        return { html: res, url: url }
+        return { html: res.split(stop.trim())[0], url: url }
       }));
     console.log(websites);
     separator();
