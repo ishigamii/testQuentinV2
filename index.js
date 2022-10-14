@@ -5,8 +5,9 @@ const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const { Configuration, OpenAIApi } = require("openai");
 const fetch = require('node-fetch');
 
-const stringUtils = require('./stringUtils');
 const htmlUtils = require('./htmlUtils');
+const stringUtils = require('./stringUtils');
+const requestUtils = require('./requestUtils');
 
 moment.locale('fr-fr');
 
@@ -57,11 +58,11 @@ const createPrompt11 = (titre, outputPrompt1) => {
 }
 
 const createPrompt2 = (titre, outputPrompt11) => {
-  return `rédige une intro jusqu'à 80 mots pour le post de blog : ${titre}.`
+  return `rédige un court texte d'intro jusqu'à 80 mots pour le post de blog : ${titre}.`
 }
 
 const createPrompt3 = (titre, outputPrompt1) => {
-  return `rédige une <meta description> jusqu'à 30 mots pour le post de blog : : ${titre}\nMettre un majuscule en début de phrase\nne pas dépasser les 155 caractères maximum.`
+  return `rédige une courte meta description jusqu'à 30 mots pour le post de blog : : ${titre}\nMettre un majuscule en début de phrase\nne pas dépasser les 155 caractères maximum.`
 }
 
 // Reformule background
@@ -397,7 +398,8 @@ async function asyncCallOpenAI(prompt) {
 
       separator();
       aiPrompt = createPrompt5(titre, tableMatsFinal);
-      const conclusionText = await asyncCallOpenAI(aiPrompt);
+      let conclusionText = await asyncCallOpenAI(aiPrompt);
+      conclusionText = `<h2>En conclusion</h2>\n${conclusionText}`
       console.log("conclusionText")
       console.log(conclusionText)
       separator();
@@ -432,26 +434,3 @@ async function asyncCallOpenAI(prompt) {
     }
   }
 }());
-
-/*
-
-//JSON placeholder is a simple placeholder REST API that returns JSON
-fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${titre}&key=AIzaSyAsz6fIGOe4LJsWmGXK6-np7gfpfqsfCdY`)
-    .then(response=> {
-        //response.json() turns the response objects body into JSON 
-        //response.json() returns a JS promise
-        //Use response.text() to turn your response object to text
-        return response.json()
-    })
-    .then(data=> {
-        //We have successfully made a GET request!
-        //Log the data to the console:
-        //resTxt.innerText = JSON.stringify(data.items[1].id.videoId, null, 2);
-        //create variable wiht id
-        let videoid = JSON.stringify(data.items[0].id.videoId).replaceAll("\"", "");
-        resTxt.innerText = videoid
-        let youtubeurl = `https://www.youtube.com/watch?v=${videoid}`
-        resTxt.innerText = youtubeurl
-    })
-
-*/

@@ -28,17 +28,78 @@ function levenshteinSimilarity(distance, str1, str2) {
   return Math.ceil(((1 - (distance / (Math.max(str1.length, str2.length)))) * 100));
 }
 
-function escapeHtml(unsafe)
-{
-    return unsafe
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
- }
+function escapeHtml(unsafe) {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function countOccurenceOfString(string, substring, wordOnly = true) {
+  let regex = null;
+  if (wordOnly) {
+    regex = new RegExp(`\\b${substring}\\b`, "gi");
+  } else {
+    regex = new RegExp(substring, "gi");
+  }
+  const occurences = (string.match(regex) || []).length;
+  return occurences;
+}
+
+function getIndexesOfString(string, substring, wordOnly = true) {
+  const message = string;
+  let msg = message;
+  let indexes = [];
+
+  let regex = null;
+  if (wordOnly) {
+    regex = new RegExp(`\\b${substring}\\b`, "gi");
+  } else {
+    regex = new RegExp(substring, "gi");
+  }
+
+  do {
+    const index = msg.search(regex);
+    indexes.push(index);
+    msg = msg.substring(index + 2);
+  } while (msg.search(regex) !== -1)
+  return indexes;
+}
+
+function replaceTooOften(text, substring, maxOccurences, replaceByArray, wordOnly = true) {
+  const occurences = countOccurenceOfString(text, substring);
+
+  if (occurences >= maxOccurences) {
+    const indexes = getIndexesOfString(text, substring);
+
+    // keep first occurence
+    const beforeText = text.slice(0, indexes[0] + substring.length);
+    let afterText = text.slice(indexes[0] + substring.length);
+
+    let regex = null;
+    if (wordOnly) {
+      regex = new RegExp(`\\b${substring}\\b`, "i");
+    } else {
+      regex = new RegExp(substring, "i");
+    }
+
+    // Replace all the other with random word from replaceByArray
+    while (afterText.search(regex) !== -1) {
+      afterText = afterText.replace(regex, replaceByArray[Math.floor(Math.random() * replaceByArray.length)]);
+    }
+
+    return `${beforeText}${afterText}`
+  }
+
+  return text;
+}
 
 exports.removeEmoji = removeEmoji;
 exports.levenshteinDistance = levenshteinDistance;
 exports.levenshteinSimilarity = levenshteinSimilarity;
 exports.escapeHtml = escapeHtml;
+exports.countOccurenceOfString = countOccurenceOfString;
+exports.getIndexesOfString = getIndexesOfString;
+exports.replaceTooOften = replaceTooOften;
