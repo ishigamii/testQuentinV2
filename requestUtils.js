@@ -1,6 +1,6 @@
 const fetch = require('node-fetch');
 
-function getYoutubeVideo(title) {
+function getYoutubeVideo(title, embed = true) {
   return fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${title}&key=AIzaSyAsz6fIGOe4LJsWmGXK6-np7gfpfqsfCdY`)
     .then(response => {
       return response.json()
@@ -8,7 +8,7 @@ function getYoutubeVideo(title) {
     .then(data => {
       //resTxt.innerText = JSON.stringify(data.items[1].id.videoId, null, 2);
       const videoid = JSON.stringify(data.items[0].id.videoId).replaceAll('"', "");
-      const youtubeURL = `https://www.youtube.com/watch?v=${videoid}`
+      const youtubeURL = embed ? `https://www.youtube.com/embed/${videoid}` : `https://www.youtube.com/watch?v=${videoid}`
       return youtubeURL;
     })
 }

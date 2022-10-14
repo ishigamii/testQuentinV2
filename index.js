@@ -79,8 +79,8 @@ const createPrompt311 = (backgroundInfo) => {
 //VERSION SANS TEXTE INTRO + SOUS TITRES
 const createPrompt4 = (titre, sujet, level = 2) => {
   let background = USE_BACKGROUND_INFO && backgroundInfo ? `INFORMATIONS CLES : -${backgroundInfo}\n\n` : '';
-  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nrédige un paragraphe engageant et très détaillé\nutilise toujours des mots de liaisons\najoute des transitions entre les phrases\nn'ajoute pas de <h1>\ntraduire les mots anglais en français\n
-PARAGRAPHE ENGAGEANT :`
+  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nrédige un paragraphe très détaillé\nutilise toujours des mots de liaisons\najoute des transitions entre les phrases\nn'ajoute pas de <h1>\ntraduire les mots anglais en français\n
+PARAGRAPHE DETAILLE :`
 }
 
 //VERSION AVEC TEXTE INTRO + SOUS TITRES
@@ -90,15 +90,15 @@ const createPrompt41 = (titre, sujet, level = 2) => {
 PARAGRAPHE ENGAGEANT :`
 }
 
+// Conclusion
 const createPrompt5 = (titre, outputPrompt1) => {
   return `rédige un texte de conclusion pour un article sur le sujet : ${titre}.\nCONCLUSION : `
 }
 
-//identifie le mot-clé principal utilisé pour la recherche d'image
-/*
+// Identifie le mot-clé principal utilisé pour la recherche d'image
 const createPrompt6 = (titre) => {
   return `IDENTIFIE LE MOT PRINCIPAL DE CE TITRE : ${titre}\ntraduit en anglais\n\nMot principal en anglais : `
-}*/
+}
 
 // OpenAI Config
 
@@ -141,6 +141,7 @@ const csvHeader = [
   { id: 'title', title: 'Title' },
   { id: 'description', title: 'Description' },
   { id: 'full', title: 'Full Text' },
+  { id: 'image', title: 'Image' },
   { id: 'token', title: 'Token Used' },
 ];
 
@@ -237,9 +238,16 @@ async function asyncCallOpenAI(prompt) {
     websites = await Promise.all(
       htmls.map(async ({ url, stop }) => {
         const res = await asyncGetUrlHTML(url)
-        return { html: res.split(stop.trim())[0], url: url }
+        const html = res.split(stop.trim())[0];
+        separator();
+        console.log(`- ${url} -`);
+        separator();
+        const extract = htmlUtils.getTitlesFromHTML(html);
+        console.log(htmlUtils.getTableMatiere(extract))
+        separator();
+        return { html: html, url: url }
       }));
-    console.log(websites);
+    //console.log(websites);
     separator();
   }
 
@@ -250,13 +258,18 @@ async function asyncCallOpenAI(prompt) {
       tableMatiere = htmlUtils.getTableMatiere(extract);
       extractFiltered = extract.filter((e) => e.tag !== 'H1')
 
-      console.log(tableMatiere)
+      if (EXTRACT_HTML) {
+        console.log(tableMatiere)
+      }
       separator();
     }
 
-    const checkOptions = prompt(`Récap des options:\n\n${options.map((o) => `${o.label} : ${o.value}`).join('\n')}\n\nVoulez-vous continuer avec ces options ? (Réponse: Oui/Non)`);
-    if (!isPromptYes(checkOptions)) {
-      return;
+    // Only check first time for EXTRACT_HTMLS
+    if (EXTRACT_HTML || (EXTRACT_HTMLS && j === 0)) {
+      const checkOptions = prompt(`Récap des options:\n\n${options.map((o) => `${o.label} : ${o.value}`).join('\n')}\n\nVoulez-vous continuer avec ces options ? (Réponse: Oui/Non)`);
+      if (!isPromptYes(checkOptions)) {
+        return;
+      }
     }
 
     for (let i = 0; i < titres.length; i++) {
@@ -399,19 +412,31 @@ async function asyncCallOpenAI(prompt) {
       separator();
       aiPrompt = createPrompt5(titre, tableMatsFinal);
       let conclusionText = await asyncCallOpenAI(aiPrompt);
-      conclusionText = `<h2>En conclusion</h2>\n${conclusionText}`
+      conclusionText = `<h2>En résumé</h2>\n${conclusionText}`
       console.log("conclusionText")
       console.log(conclusionText)
       separator();
 
+      // Get Image and Video
       separator();
-      const concat = [introText, subjectsData.join('\n'), conclusionText].join('\n')
+      aiPrompt = createPrompt6(titre);
+      let imageTag = await asyncCallOpenAI(aiPrompt);
+      const image = requestUtils.getPixabayImage(imageTag);
+      const video = requestUtils.getYoutubeVideo(titre, false);
+      const videoText = `\n<h2>Vidéo sur le sujet</h2>\n${video}`;
+
+      separator();
+      let concat = [introText, subjectsData.join('\n'), conclusionText, videoText].join('\n')
+
+      // Rework text to avoid repetition
+      concat = stringUtils.replaceTooOften(concat, "Tout d'abord,", 3, ["Premièrement,", "Pour commencer,", "En premier,"]);
       separator();
 
       const datas = {
         title: titre,
         description: metaDescriptionText,
         full: concat,
+        image: image,
         token: totalUsed,
         //tableMatiere: tableMatsFinal,
       }
