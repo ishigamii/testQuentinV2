@@ -58,11 +58,11 @@ const createPrompt11 = (titre, outputPrompt1) => {
 }
 
 const createPrompt2 = (titre, outputPrompt11) => {
-  return `rédige un court texte d'intro jusqu'à 80 mots pour le post de blog : ${titre}.`
+  return `rédige un court texte d'intro en français jusqu'à 80 mots pour le post de blog : ${titre}.`
 }
 
 const createPrompt3 = (titre, outputPrompt1) => {
-  return `rédige une courte meta description jusqu'à 30 mots pour le post de blog : : ${titre}\nMettre un majuscule en début de phrase\nne pas dépasser les 155 caractères maximum.`
+  return `rédige une courte meta description en français jusqu'à 30 mots pour le post de blog : : ${titre}\nMettre un majuscule en début de phrase\nne pas dépasser les 155 caractères maximum.`
 }
 
 // Reformule background
@@ -79,7 +79,7 @@ const createPrompt311 = (backgroundInfo) => {
 //VERSION SANS TEXTE INTRO + SOUS TITRES
 const createPrompt4 = (titre, sujet, level = 2) => {
   let background = USE_BACKGROUND_INFO && backgroundInfo ? `INFORMATIONS CLES : -${backgroundInfo}\n\n` : '';
-  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nrédige un paragraphe très détaillé\nutilise toujours des mots de liaisons\najoute des transitions entre les phrases\nn'ajoute pas de <h1>\ntraduire les mots anglais en français\n
+  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nrédige un paragraphe très détaillé en français\nutilise toujours des mots de liaisons\najoute des transitions entre les phrases\nn'ajoute pas de <h1>\ntraduire les mots anglais en français\n
 PARAGRAPHE DETAILLE :`
 }
 
@@ -97,7 +97,7 @@ const createPrompt5 = (titre, outputPrompt1) => {
 
 // Identifie le mot-clé principal utilisé pour la recherche d'image
 const createPrompt6 = (titre) => {
-  return `IDENTIFIE LE MOT PRINCIPAL DE CE TITRE : ${titre}\ntraduit en anglais\n\nMot principal en anglais : `
+  return `what is the most important single word of this text : ${titre}\ntraduit en anglais\nMost important Word: `
 }
 
 // OpenAI Config
@@ -224,7 +224,7 @@ async function asyncCallOpenAI(prompt) {
   let titres = await csvEnd;
   console.log(titres);
   separator();
-
+  
   const res = [];
   const saved = [];
 
@@ -236,7 +236,7 @@ async function asyncCallOpenAI(prompt) {
   if (EXTRACT_HTMLS) {
     let htmls = await csvHtmlsEnd;
     websites = await Promise.all(
-      htmls.map(async ({ url, stop }) => {
+      htmls.map(async ({ url, stop, tag }) => {
         const res = await asyncGetUrlHTML(url)
         const html = res.split(stop.trim())[0];
         separator();
@@ -245,7 +245,7 @@ async function asyncCallOpenAI(prompt) {
         const extract = htmlUtils.getTitlesFromHTML(html);
         console.log(htmlUtils.getTableMatiere(extract))
         separator();
-        return { html: html, url: url }
+        return { html: html, url: url, tag: tag }
       }));
     //console.log(websites);
     separator();
@@ -419,10 +419,13 @@ async function asyncCallOpenAI(prompt) {
 
       // Get Image and Video
       separator();
-      aiPrompt = createPrompt6(titre);
-      let imageTag = await asyncCallOpenAI(aiPrompt);
-      const image = requestUtils.getPixabayImage(imageTag);
-      const video = requestUtils.getYoutubeVideo(titre, false);
+      let image = null;
+      if( EXTRACT_HTMLS ) {
+        const imageTag = websites[j]?.tag;
+        image = await requestUtils.getPixabayImage(imageTag);
+        console.log(image, " for tag", imageTag);
+      }
+      const video = await requestUtils.getYoutubeVideo(titre, false);
       const videoText = `\n<h2>Vidéo sur le sujet</h2>\n${video}`;
 
       separator();
