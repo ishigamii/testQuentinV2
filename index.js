@@ -221,9 +221,12 @@ async function asyncCallOpenAI(prompt) {
 }
 
 (async function() {
-  let titres = await csvEnd;
-  console.log(titres);
-  separator();
+  let titres = null;
+  if (!EXTRACT_HTML && !EXTRACT_HTMLS) {
+    titres = await csvEnd;
+    console.log(titres);
+    separator();
+  }
   
   const res = [];
   const saved = [];
@@ -243,6 +246,8 @@ async function asyncCallOpenAI(prompt) {
         console.log(`- ${url} -`);
         separator();
         const extract = htmlUtils.getTitlesFromHTML(html);
+        console.log(extract)
+        separator();
         console.log(htmlUtils.getTableMatiere(extract))
         separator();
         return { html: html, url: url, tag: tag }

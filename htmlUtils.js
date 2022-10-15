@@ -12,13 +12,17 @@ function removeTagFromHtml(html) {
   return "";
 }
 
-function getTitlesFromHTML(html) {
+/**
+* @param html The html
+* @param maxHeaderNumber max header number not included if 4 will only take h1/h2/h3
+*/
+function getTitlesFromHTML(html, maxHeaderNumber = 4) {
   if (html && !!html.trim()) {
     const { JSDOM } = jsdom;
     const document = new JSDOM(html).window.document;
     const body = document.body.innerHTML;
     let res = [];
-    for (let i = 1; i < 4; i++) {
+    for (let i = 1; i < maxHeaderNumber; i++) {
       const target = `h${i}`;
       const matches = Array.from(document.querySelectorAll(target));
       //console.log(`${target}:`);
@@ -28,22 +32,25 @@ function getTitlesFromHTML(html) {
         console.log(e.textContent)
         console.log(body.indexOf(e.innerHTML))
         console.log("======")*/
-        let next = e.nextElementSibling
+        //let next = e.nextElementSibling // for only Element
+        let next = e.nextSibling // for Element and direct text
         let text = ''
-        while (next && !next.tagName.startsWith('H')) {
-          if (next?.innerHTML.match(/<h\d>/)) {
+        while (next && !next?.tagName?.startsWith('H')) {
+          if (next?.innerHTML?.match(/<h\d>/)) {
             const div = document.createElement("div");
             div.innerHTML = next?.innerHTML.split(/<h\d>/)[0]
             text += div.textContent;
             break;
           } else {
             //console.log(next?.textContent)
-            //console.log("===", next.tagName)
-            text += next?.textContent;
+            //console.log(next?.value)
+            //console.log("===", next?.tagName)
+            text += (next?.textContent || next?.value || '').trim();
           }
-          next = next.nextElementSibling;
+          //next = next.nextElementSibling;
+          next = next.nextSibling;
         }
-        //console.log(text)
+        //console.log("Text found: ", text)
         return { position: body.indexOf(e.innerHTML), title: stringUtils.removeEmoji(e.textContent), tag: e.tagName, paragraph: stringUtils.removeEmoji(text) }
       })];
     }
