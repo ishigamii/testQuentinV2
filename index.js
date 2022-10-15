@@ -227,6 +227,7 @@ async function asyncCallOpenAI(prompt) {
     console.log(titres);
     separator();
   }
+
   
   const res = [];
   const saved = [];
@@ -241,9 +242,10 @@ async function asyncCallOpenAI(prompt) {
     websites = await Promise.all(
       htmls.map(async ({ url, stop, tag }) => {
         const res = await asyncGetUrlHTML(url)
-        const html = res.split(stop.trim())[0];
+        const html = stop.trim() ? res.split(stop.trim())[0] : res;
         separator();
         console.log(`- ${url} -`);
+        console.log(`- ${stop} ${tag} -`);
         separator();
         const extract = htmlUtils.getTitlesFromHTML(html);
         console.log(extract)

@@ -51,7 +51,7 @@ function getTitlesFromHTML(html, maxHeaderNumber = 4) {
           next = next.nextSibling;
         }
         //console.log("Text found: ", text)
-        return { position: body.indexOf(e.innerHTML), title: stringUtils.removeEmoji(e.textContent), tag: e.tagName, paragraph: stringUtils.removeEmoji(text) }
+        return { position: body.indexOf(e.innerHTML), title: stringUtils.removeEmoji(e.textContent?.trim()), tag: e.tagName, paragraph: stringUtils.removeEmoji(text) }
       })];
     }
     return res.filter((e) => e.title?.trim() || e.paragraph?.trim()).sort((a, b) => a.position - b.position);
