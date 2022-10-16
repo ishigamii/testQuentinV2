@@ -21,6 +21,7 @@ function getTitlesFromHTML(html, maxHeaderNumber = 4) {
     const { JSDOM } = jsdom;
     const document = new JSDOM(html).window.document;
     const body = document.body.innerHTML;
+    //console.log(document, body)
     let res = [];
     for (let i = 1; i < maxHeaderNumber; i++) {
       const target = `h${i}`;
@@ -44,7 +45,7 @@ function getTitlesFromHTML(html, maxHeaderNumber = 4) {
           } else {
             //console.log(next?.textContent)
             //console.log(next?.value)
-            //console.log("===", next?.tagName)
+            //console.log("===", next?.tagName ?? next)
             text += (next?.textContent || next?.value || '').trim();
           }
           //next = next.nextElementSibling;

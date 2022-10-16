@@ -251,6 +251,8 @@ async function asyncCallOpenAI(prompt) {
           console.log(`Removed ${h1Split[0].length} chars from html (${h1Split.length})`)
           html = `<h1${h1Split[1]}`;
         }
+        // Remove comments from html
+        html = html.replaceAll(/<!--.*?-->/gi, '');
         separator();
         console.log(`- ${url} -`);
         console.log(`- ${stop} ${tag} -`);
@@ -265,8 +267,6 @@ async function asyncCallOpenAI(prompt) {
     //console.log(websites);
     separator();
   }
-
-  return
 
   for (let j = 0; j < Math.max(1, websites.length); j++) {
     if (EXTRACT_HTML || EXTRACT_HTMLS) {
