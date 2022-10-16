@@ -221,13 +221,16 @@ async function asyncCallOpenAI(prompt) {
 }
 
 (async function() {
-  let titres = null;
-  if (!EXTRACT_HTML && !EXTRACT_HTMLS) {
-    titres = await csvEnd;
-    console.log(titres);
-    separator();
-  }
-
+  let titres = await csvEnd;
+  console.log(titres);
+  separator();
+  
+  //TODO instead of top + modify the for after
+  /*if (!EXTRACT_HTML && !EXTRACT_HTMLS) {
+  titres = await csvEnd;
+  console.log(titres);
+  separator();
+  }*/
   
   const res = [];
   const saved = [];
