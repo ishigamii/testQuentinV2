@@ -6,9 +6,21 @@ function getYoutubeVideo(title, embed = true) {
       return response.json()
     })
     .then(data => {
-      //resTxt.innerText = JSON.stringify(data.items[1].id.videoId, null, 2);
-      const videoid = JSON.stringify(data.items[0].id.videoId).replaceAll('"', "");
-      const youtubeURL = embed ? `https://www.youtube.com/embed/${videoid}` : `https://www.youtube.com/watch?v=${videoid}`
+      let youtubeURL = null;
+      const videos = (data.items || []).filter((v) => v.id?.videoId);
+      if (videos.length > 0) {
+        const video = videos[0]
+        const videoid = video.id.videoId
+        if (videoid) {
+          youtubeURL = embed ? `https://www.youtube.com/embed/${videoid}` : `https://www.youtube.com/watch?v=${videoid}`
+        } else {
+          console.log("couldn't find video", title, data)
+          data.items.map((item) => {
+            console.log(item)
+            return item
+          })
+        }
+      }
       return youtubeURL;
     })
 }
