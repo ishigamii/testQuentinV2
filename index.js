@@ -245,7 +245,12 @@ async function asyncCallOpenAI(prompt) {
     websites = await Promise.all(
       htmls.map(async ({ url, stop, tag }) => {
         const res = await asyncGetUrlHTML(url)
-        const html = stop.trim() ? res.split(stop.trim())[0] : res;
+        let html = stop.trim() ? res.split(stop.trim())[0] : res;
+        const h1Split = html.split(/<h1/i);
+        if( h1Split.length > 1 ) {
+          console.log(`Removed ${h1Split[0].length} chars from html (${h1Split.length})`)
+          html = `<h1${h1Split[1]}`;
+        }
         separator();
         console.log(`- ${url} -`);
         console.log(`- ${stop} ${tag} -`);
@@ -260,6 +265,8 @@ async function asyncCallOpenAI(prompt) {
     //console.log(websites);
     separator();
   }
+
+  return
 
   for (let j = 0; j < Math.max(1, websites.length); j++) {
     if (EXTRACT_HTML || EXTRACT_HTMLS) {
