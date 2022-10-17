@@ -79,8 +79,8 @@ const createPrompt311 = (backgroundInfo) => {
 //VERSION SANS TEXTE INTRO + SOUS TITRES
 const createPrompt4 = (titre, sujet, level = 2) => {
   let background = USE_BACKGROUND_INFO && backgroundInfo ? `INFORMATIONS CLES : -${backgroundInfo}\n\n` : '';
-  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nrédige un paragraphe très détaillé en français\nutilise toujours des mots de liaisons\najoute des transitions entre les phrases\nn'ajoute pas de <h1>\ntraduire les mots anglais en français\n
-PARAGRAPHE DETAILLE :`
+  return `SUJET DE L'ARTICLE : ${titre}\n\nSUJET DU PARAGRAPHE : ${sujet}\n\n${background}\n\nrédige un paragraphe engageant et très détaillé en français\nutilise toujours des mots de liaisons\najoute des transitions entre les phrases\nn'ajoute pas de <h1>\ntraduire les mots anglais en français\n
+PARAGRAPHE ENGAGEANT :`
 }
 
 //VERSION AVEC TEXTE INTRO + SOUS TITRES
@@ -188,8 +188,17 @@ function isPromptYes(val) {
 }
 
 async function asyncGetUrlHTML(url) {
-  const response = await fetch(url);
+  let options = {};
+  options.redirect = "follow";
+  options.follow = 20;
+  let headers = {
+    'user-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
+    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+  };
+  options.headers = headers;
+  const response = await fetch(url, options);
   const body = await response.text();
+  console.log(body)
   return body;
 }
 
@@ -224,14 +233,14 @@ async function asyncCallOpenAI(prompt) {
   let titres = await csvEnd;
   console.log(titres);
   separator();
-  
+
   //TODO instead of top + modify the for after
   /*if (!EXTRACT_HTML && !EXTRACT_HTMLS) {
   titres = await csvEnd;
   console.log(titres);
   separator();
   }*/
-  
+
   const res = [];
   const saved = [];
 
@@ -244,24 +253,26 @@ async function asyncCallOpenAI(prompt) {
     let htmls = await csvHtmlsEnd;
     websites = await Promise.all(
       htmls.map(async ({ url, stop, tag }) => {
-        const res = await asyncGetUrlHTML(url)
+        const isUrl = url.startsWith("http");
+        const res = isUrl ? await asyncGetUrlHTML(url) : url;
         let html = stop.trim() ? res.split(stop.trim())[0] : res;
         const h1Split = html.split(/<h1/i);
-        if( h1Split.length > 1 ) {
+        if (h1Split.length > 1) {
           console.log(`Removed ${h1Split[0].length} chars from html (${h1Split.length})`)
           html = `<h1${h1Split[1]}`;
         }
         // Remove comments from html
         html = html.replaceAll(/<!--.*?-->/gi, '');
         separator();
-        console.log(`- ${url} -`);
-        console.log(`- ${stop} ${tag} -`);
+        console.log(`- ${isUrl ? url : 'HTML'} -`);
+        console.log(`- stop:${stop} - tag:${tag} -`);
         separator();
         const extract = htmlUtils.getTitlesFromHTML(html);
         console.log(extract)
         separator();
         console.log(htmlUtils.getTableMatiere(extract))
         separator();
+        //TODO save extract et table matière to reuse
         return { html: html, url: url, tag: tag }
       }));
     //console.log(websites);
@@ -437,13 +448,13 @@ async function asyncCallOpenAI(prompt) {
       // Get Image and Video
       separator();
       let image = null;
-      if( EXTRACT_HTMLS ) {
+      if (EXTRACT_HTMLS) {
         const imageTag = websites[j]?.tag;
         image = await requestUtils.getPixabayImage(imageTag);
         console.log(image, " for tag", imageTag);
       }
       const video = await requestUtils.getYoutubeVideo(titre, false);
-      const videoText = `\n<h2>Vidéo sur le sujet</h2>\n${video}`;
+      const videoText = video ? `\n<h2>Vidéo sur le sujet</h2>\n${video}` : '';
 
       separator();
       let concat = [introText, subjectsData.join('\n'), conclusionText, videoText].join('\n')

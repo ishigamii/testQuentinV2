@@ -6,7 +6,7 @@ function getYoutubeVideo(title, embed = true) {
       return response.json()
     })
     .then(data => {
-      let youtubeURL = null;
+      let youtubeURL = "";
       const videos = (data.items || []).filter((v) => v.id?.videoId);
       if (videos.length > 0) {
         const video = videos[0]
