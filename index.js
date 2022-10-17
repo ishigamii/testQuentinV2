@@ -27,8 +27,8 @@ const options = [{ label: "Background info", value: USE_BACKGROUND_INFO },
 { label: "Extract from html", value: EXTRACT_HTML },
 { label: "Extract from csv htmls", value: EXTRACT_HTMLS },
 { label: "Show prompt", value: SHOW_PROMPT },
-{ label: "Levelshtein percent", value: LEVENSHTEIN_PERCENT },
-{ label: "Levelshtein max retry", value: LEVENSHTEIN_MAX_RETRY }]
+{ label: "Levenshtein percent", value: LEVENSHTEIN_PERCENT },
+{ label: "Levenshtein max retry", value: LEVENSHTEIN_MAX_RETRY }]
 
 const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
@@ -46,6 +46,9 @@ let backgroundInfo = fs.readFileSync(DEFAULT_BACKGROUND_INFO_PATH, "utf8")
 // HTML file base
 const DEFAULT_HTML_PATH = 'html.txt';
 const DEFAULT_HTMLS_PATH = 'htmls.csv';
+
+// Levenshtein
+const DEFAULT_LEVENSHTEIN_PATH = "levenshteinMore65.txt";
 
 // Prompts
 
@@ -233,7 +236,7 @@ async function asyncCallOpenAI(prompt) {
   let titres = await csvEnd;
   console.log(titres);
   separator();
-
+  
   //TODO instead of top + modify the for after
   /*if (!EXTRACT_HTML && !EXTRACT_HTMLS) {
   titres = await csvEnd;
@@ -425,6 +428,10 @@ async function asyncCallOpenAI(prompt) {
 
           if (best.text) {
             sectionText = best.text;
+          }
+
+          if (best.percent > LEVENSHTEIN_PERCENT) {
+            fs.appendFileSync(DEFAULT_LEVENSHTEIN_PATH, `${formatedSubject}-${best.percent}\n${best.text}\n`)
           }
 
           if (!sectionText.includes(`<h${deepth}>`)) {
