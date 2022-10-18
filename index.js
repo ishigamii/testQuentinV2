@@ -201,7 +201,7 @@ async function asyncGetUrlHTML(url) {
   options.headers = headers;
   const response = await fetch(url, options);
   const body = await response.text();
-  console.log(body)
+  //console.log(body)
   return body;
 }
 
@@ -431,7 +431,7 @@ async function asyncCallOpenAI(prompt) {
           }
 
           if (best.percent > LEVENSHTEIN_PERCENT) {
-            fs.appendFileSync(DEFAULT_LEVENSHTEIN_PATH, `${formatedSubject}-${best.percent}\n${best.text}\n`)
+            fs.appendFileSync(DEFAULT_LEVENSHTEIN_PATH, `${formatedSubject}-${best.percent}%\n${best.text}\n`)
           }
 
           if (!sectionText.includes(`<h${deepth}>`)) {

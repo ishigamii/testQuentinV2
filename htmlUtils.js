@@ -31,7 +31,7 @@ function getTitlesFromHTML(html, maxHeaderNumber = 4) {
       res = [...res, ...matches.map((e) => {
         /*console.log("======")
         console.log(e.textContent)
-        console.log(body.indexOf(e.innerHTML))
+        console.log(body.indexOf(e.outerHTML))
         console.log("======")*/
         //let next = e.nextElementSibling // for only Element
         let next = e.nextSibling // for Element and direct text
@@ -52,7 +52,7 @@ function getTitlesFromHTML(html, maxHeaderNumber = 4) {
           next = next.nextSibling;
         }
         //console.log("Text found: ", text)
-        return { position: body.indexOf(e.innerHTML), title: stringUtils.removeEmoji(e.textContent?.trim()), tag: e.tagName, paragraph: stringUtils.removeEmoji(text) }
+        return { position: body.indexOf(e.outerHTML), title: stringUtils.removeEmoji(e.textContent?.trim()), tag: e.tagName, paragraph: stringUtils.removeEmoji(text) }
       })];
     }
     return res.filter((e) => e.title?.trim() || e.paragraph?.trim()).sort((a, b) => a.position - b.position);
