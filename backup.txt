@@ -1,0 +1,31 @@
+const createPrompt2 = (titre, outputPrompt11) => {
+  return `rédige une introduction jusqu'à 80 mots pour un article sur le sujet : ${titre} qui présente la table des matières : ${outputPrompt11}.`
+}
+
+1. Qu'est-ce qu'une souris gamer ?
+2. Pourquoi choisir une souris gamer ?
+  2.1. Les différents types de souris gamer
+  2.2 Les avantages d'une souris gamer
+  2.3. Les inconvénients d'une souris gamer
+3. Comment choisir une souris gamer ?
+  3.1. Les caractéristiques à prendre en compte
+  3.2. Les critères de sélection
+  3.3. Les fonctionnalités indispensables d'une souris gamer
+4. Comparatif des meilleures souris gamer
+  4.1. Quelles sont les meilleurs modèles de souris gamer ?
+  4.2. Quelles sont les meilleures marques de souris gamer ?
+  4.3. tableau comparatif des meilleurs souris pour gamer
+
+3. Comment choisir sa souris pour gamer ?
+    3.1. La forme
+    3.2. La prise en main
+    3.3. Les boutons
+    3.4. La résolution
+    3.5. La vitesse
+    3.5. Les focntionnalités
+4. Les meilleures souris pour gamer
+    4.1. Razer DeathAdder Elite
+    4.2. Logitech G900 Chaos Spectrum
+    4.3. SteelSeries Rival 310
+    4.4. Corsair Sabre RGB
+    4.5. tableau comparatif des meilleurs souris pour gamer

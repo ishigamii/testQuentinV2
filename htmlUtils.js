@@ -12,6 +12,21 @@ function removeTagFromHtml(html) {
   return "";
 }
 
+function getDescriptionFromHTML(html, url) {
+  let res = "";
+  if (html && !!html.trim()) {
+    const { JSDOM } = jsdom;
+    const document = new JSDOM(html).window.document;
+    if (url.startsWith('https://www.amazon.fr')) {
+      const matches = Array.from(document.querySelectorAll("h2"));
+      const match = matches.find((m) => m.innerHTML.includes("Description du produit"))
+      let next = match.nextElementSibling;
+      res = (next?.textContent || next?.value || '').trim();
+    }
+  }
+  return res;
+}
+
 /**
 * @param html The html
 * @param maxHeaderNumber max header number not included if 4 will only take h1/h2/h3
@@ -46,12 +61,15 @@ function getTitlesFromHTML(html, maxHeaderNumber = 4) {
             //console.log(next?.textContent)
             //console.log(next?.value)
             //console.log("===", next?.tagName ?? next)
+            
+            // Maybe next?.innerText would be nicer
             text += (next?.textContent || next?.value || '').trim();
           }
           //next = next.nextElementSibling;
           next = next.nextSibling;
         }
-        //console.log("Text found: ", text)
+        //console.log("Text found: ", text )
+        //console.log("\nSans emoji:",  stringUtils.removeEmoji(text))
         return { position: body.indexOf(e.outerHTML), title: stringUtils.removeEmoji(e.textContent?.trim()), tag: e.tagName, paragraph: stringUtils.removeEmoji(text) }
       })];
     }
@@ -89,3 +107,4 @@ function getTableMatiere(extractArray) {
 exports.removeTagFromHtml = removeTagFromHtml;
 exports.getTitlesFromHTML = getTitlesFromHTML;
 exports.getTableMatiere = getTableMatiere;
+exports.getDescriptionFromHTML = getDescriptionFromHTML;

@@ -20,6 +20,7 @@ const SHOW_PROMPT = true;
 const EXTRACT_HTML = false;
 const EXTRACT_HTMLS = true;
 const USE_BACKGROUND_INFO = false || EXTRACT_HTML || EXTRACT_HTMLS;
+const REWRITE_PRODUCTS = false;
 const LEVENSHTEIN_PERCENT = 65; // percent max otherwise we reload
 const LEVENSHTEIN_MAX_RETRY = 2; // number max of retry 
 
@@ -46,6 +47,9 @@ let backgroundInfo = fs.readFileSync(DEFAULT_BACKGROUND_INFO_PATH, "utf8")
 // HTML file base
 const DEFAULT_HTML_PATH = 'html.txt';
 const DEFAULT_HTMLS_PATH = 'htmls.csv';
+
+// Products fils
+const DEFAULT_PRODUCTS_PATH = 'products.csv';
 
 // Levenshtein
 const DEFAULT_LEVENSHTEIN_PATH = "levenshteinMore65.txt";
@@ -103,6 +107,11 @@ const createPrompt6 = (titre) => {
   return `what is the most important single word of this text : ${titre}\ntraduit en anglais\nMost important Word: `
 }
 
+// Prompt to rework description
+const createPromptReworkDescription = (description) => {
+  return "" //TODO QUENTIN
+}
+
 // OpenAI Config
 
 const configuration = new Configuration({
@@ -139,6 +148,20 @@ const csvHtmlsEnd = new Promise(function(resolve, reject) {
   });
 });
 
+const productUrls = [];
+const csvProducts = fs.createReadStream(DEFAULT_PRODUCTS_PATH)
+  .pipe(csv())
+  .on('data', (row) => {
+    productUrls.push({ ...row });
+  })
+
+const csvProductsEnd = new Promise(function(resolve, reject) {
+  csvProducts.on('end', () => {
+    console.log('CSV file successfully processed');
+    resolve(productUrls);
+  });
+});
+
 
 const csvHeader = [
   { id: 'title', title: 'Title' },
@@ -156,6 +179,17 @@ const csvWriter = createCsvWriter({
 const csvWriterAppend = createCsvWriter({
   path: 'datasAppend.csv',
   header: csvHeader,
+  append: true,
+});
+
+const csvHeaderRework = [
+  { id: 'url', title: 'URL' },
+  { id: 'description', title: 'Description' },
+];
+
+const csvWriterReworkAppend = createCsvWriter({
+  path: 'productsRework.csv',
+  header: csvHeaderRework,
   append: true,
 });
 
@@ -236,13 +270,41 @@ async function asyncCallOpenAI(prompt) {
   let titres = await csvEnd;
   console.log(titres);
   separator();
-  
+
   //TODO instead of top + modify the for after
   /*if (!EXTRACT_HTML && !EXTRACT_HTMLS) {
   titres = await csvEnd;
   console.log(titres);
   separator();
   }*/
+
+  if (REWRITE_PRODUCTS) {
+    let products = await csvProductsEnd;
+    productsData = await Promise.all(
+      products.map(async ({ url }) => {
+        const isUrl = url.startsWith("http");
+        const res = isUrl ? await asyncGetUrlHTML(url) : url;
+        let html = res;
+        separator();
+        console.log(`- ${isUrl ? url : `description: ${url}`} -`);
+        separator();
+        const description = htmlUtils.getDescriptionFromHTML(html, url);
+        console.log(description)
+        separator();
+        return { description: description, url: url }
+      }));
+
+    for (let j = 0; j < productsData.length; j++) {
+      const { description, url } = productsData[j];
+      const text = await asyncCallOpenAI(createPromptReworkDescription(description));
+      csvWriterReworkAppend.writeRecords([{ description: text, url: url }])
+    }
+
+    separator();
+    console.log("Rework products END")
+    separator();
+    return
+  }
 
   const res = [];
   const saved = [];
