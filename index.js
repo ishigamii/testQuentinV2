@@ -18,9 +18,9 @@ let globalTotalUsed = 0;
 
 const SHOW_PROMPT = true;
 const EXTRACT_HTML = false;
-const EXTRACT_HTMLS = true;
+const EXTRACT_HTMLS = false;
 const USE_BACKGROUND_INFO = false || EXTRACT_HTML || EXTRACT_HTMLS;
-const REWRITE_PRODUCTS = false;
+const REWRITE_PRODUCTS = true;
 const LEVENSHTEIN_PERCENT = 65; // percent max otherwise we reload
 const LEVENSHTEIN_MAX_RETRY = 2; // number max of retry 
 
@@ -34,6 +34,10 @@ const options = [{ label: "Background info", value: USE_BACKGROUND_INFO },
 const startDate = new Date("2022-08-01 8:00");
 const intervaleHour = "12";
 const outputFormat = "YYYY-MM-DD HH:mm";
+
+// OpenAi
+let frequency_multiplier = 5;
+let presence_multiplier = 2;
 
 const regexTable = /^\s*(\d\s?(\.|\)))*\s*/;
 
@@ -49,7 +53,7 @@ const DEFAULT_HTML_PATH = 'html.txt';
 const DEFAULT_HTMLS_PATH = 'htmls.csv';
 
 // Products fils
-const DEFAULT_PRODUCTS_PATH = 'products.csv';
+const DEFAULT_PRODUCTS_PATH = 'product_export.csv';
 
 // Levenshtein
 const DEFAULT_LEVENSHTEIN_PATH = "levenshteinMore65.txt";
@@ -79,7 +83,7 @@ const createPrompt31 = (backgroundInfo) => {
 
 // infos-clés du background reformulé
 const createPrompt311 = (backgroundInfo) => {
-  return `Quels sont les informations clés de ce texte: :\n"${backgroundInfo}"\n\nJusque 10 informations clés : -`
+  return `Quels sont les informations clés de ce texte: \n"${backgroundInfo}"\n\nJusque 10 informations clés : -`
 }
 
 //Sujet étant les différents élements du prompt 1
@@ -107,9 +111,17 @@ const createPrompt6 = (titre) => {
   return `what is the most important single word of this text : ${titre}\ntraduit en anglais\nMost important Word: `
 }
 
-// Prompt to rework description
-const createPromptReworkDescription = (description) => {
-  return "" //TODO QUENTIN
+// Prompt to rework Title
+const createPromptReworkTitle = (title) => {
+  return `Reformule complète ce titre produit afin de le rendre plus court et impactant : "${title}"\n\nTitre reformulé :`
+}
+
+const createPromptReworkDescription1 = (description) => {
+  return `Quels sont les informations clés de ce texte: :\n"${description}"\n\nJusque 10 informations clés : -`
+}
+
+const createPromptReworkDescription2 = (description) => {
+  return `Reformule totalement en français chaque phrase du texte suivant : "${description}"\nutilise un ton engageant\nConserve toujours les accents\n\nTexte engageant reformulé :`
 }
 
 // OpenAI Config
@@ -187,9 +199,215 @@ const csvHeaderRework = [
   { id: 'description', title: 'Description' },
 ];
 
+const csvHeaderProductsFull = ["post_title",
+  "post_name",
+  "post_parent",
+  "ID",
+  "post_content",
+  "post_excerpt",
+  "post_status",
+  "post_password",
+  "menu_order",
+  "post_date",
+  "post_author",
+  "comment_status",
+  "sku",
+  "parent_sku",
+  "children",
+  "downloadable",
+  "virtual",
+  "stock",
+  "regular_price",
+  "sale_price",
+  "weight",
+  "length",
+  "width",
+  "height",
+  "tax_class",
+  "visibility",
+  "stock_status",
+  "backorders",
+  "sold_individually",
+  "low_stock_amount",
+  "manage_stock",
+  "tax_status",
+  "upsell_ids",
+  "crosssell_ids",
+  "purchase_note",
+  "sale_price_dates_from",
+  "sale_price_dates_to",
+  "download_limit",
+  "download_expiry",
+  "product_url",
+  "button_text",
+  "images",
+  "downloadable_files",
+  "product_page_url",
+  "meta:total_sales",
+  "meta:_yoast_wpseo_focuskw",
+  "meta:_yoast_wpseo_canonical",
+  "meta:_yoast_wpseo_bctitle",
+  "meta:_yoast_wpseo_meta-robots-adv",
+  "meta:_yoast_wpseo_is_cornerstone",
+  "meta:_yoast_wpseo_metadesc",
+  "meta:_yoast_wpseo_linkdex",
+  "meta:_yoast_wpseo_estimated-reading-time-minutes",
+  "meta:_yoast_wpseo_content_score",
+  "meta:_yoast_wpseo_title",
+  "meta:_yoast_wpseo_metakeywords",
+  "tax:product_type",
+  "tax:product_visibility",
+  "tax:product_cat",
+  "tax:product_tag",
+  "tax:product_shipping_class",
+  "attribute:Batteries Piles requises",
+  "attribute_data:Batteries Piles requises",
+  "attribute_default:Batteries Piles requises",
+  "attribute:CN",
+  "attribute_data:CN",
+  "attribute_default:CN",
+  "attribute:Caractères",
+  "attribute_data:Caractères",
+  "attribute_default:Caractères",
+  "attribute:Characters",
+  "attribute_data:Characters",
+  "attribute_default:Characters",
+  "attribute:Composants",
+  "attribute_data:Composants",
+  "attribute_default:Composants",
+  "attribute:Composition",
+  "attribute_data:Composition",
+  "attribute_default:Composition",
+  "attribute:Conseils dentretien",
+  "attribute_data:Conseils dentretien",
+  "attribute_default:Conseils dentretien",
+  "attribute:Date de mise en ligne sur Amazon.fr",
+  "attribute_data:Date de mise en ligne sur Amazon.fr",
+  "attribute_default:Date de mise en ligne sur Amazon.fr",
+  "attribute:Department Name",
+  "attribute_data:Department Name",
+  "attribute_default:Department Name",
+  "attribute:Dimensions du colis",
+  "attribute_data:Dimensions du colis",
+  "attribute_default:Dimensions du colis",
+  "attribute:Dimensions du produit L x l x h",
+  "attribute_data:Dimensions du produit L x l x h",
+  "attribute_default:Dimensions du produit L x l x h",
+  "attribute:Disponibilité des pièces détachées",
+  "attribute_data:Disponibilité des pièces détachées",
+  "attribute_default:Disponibilité des pièces détachées",
+  "attribute:Fabricant",
+  "attribute_data:Fabricant",
+  "attribute_default:Fabricant",
+  "attribute:Langue",
+  "attribute_data:Langue",
+  "attribute_default:Langue",
+  "attribute:Marque",
+  "attribute_data:Marque",
+  "attribute_default:Marque",
+  "attribute:Materiau dextérieur",
+  "attribute_data:Materiau dextérieur",
+  "attribute_default:Materiau dextérieur",
+  "attribute:Matière",
+  "attribute_data:Matière",
+  "attribute_default:Matière",
+  "attribute:Matière principale",
+  "attribute_data:Matière principale",
+  "attribute_default:Matière principale",
+  "attribute:Matériau",
+  "attribute_data:Matériau",
+  "attribute_default:Matériau",
+  "attribute:Nom de marque",
+  "attribute_data:Nom de marque",
+  "attribute_default:Nom de marque",
+  "attribute:Nombre de joueurs",
+  "attribute_data:Nombre de joueurs",
+  "attribute_default:Nombre de joueurs",
+  "attribute:Nombre de pièces",
+  "attribute_data:Nombre de pièces",
+  "attribute_default:Nombre de pièces",
+  "attribute:Numéro de Modèle",
+  "attribute_data:Numéro de Modèle",
+  "attribute_default:Numéro de Modèle",
+  "attribute:Numéro de modèle",
+  "attribute_data:Numéro de modèle",
+  "attribute_default:Numéro de modèle",
+  "attribute:Numéro du modèle de larticle",
+  "attribute_data:Numéro du modèle de larticle",
+  "attribute_default:Numéro du modèle de larticle",
+  "attribute:Origine",
+  "attribute_data:Origine",
+  "attribute_default:Origine",
+  "attribute:Pays dorigine",
+  "attribute_data:Pays dorigine",
+  "attribute_default:Pays dorigine",
+  "attribute:Piles incluses",
+  "attribute_data:Piles incluses",
+  "attribute_default:Piles incluses",
+  "attribute:Poids de larticle",
+  "attribute_data:Poids de larticle",
+  "attribute_default:Poids de larticle",
+  "attribute:Production interrompue par le fabricant",
+  "attribute_data:Production interrompue par le fabricant",
+  "attribute_default:Production interrompue par le fabricant",
+  "attribute:Produit à monter soi-même",
+  "attribute_data:Produit à monter soi-même",
+  "attribute_default:Produit à monter soi-même",
+  "attribute:Référence constructeur",
+  "attribute_data:Référence constructeur",
+  "attribute_default:Référence constructeur",
+  "attribute:Référence fabricant",
+  "attribute_data:Référence fabricant",
+  "attribute_default:Référence fabricant",
+  "attribute:Sexe",
+  "attribute_data:Sexe",
+  "attribute_default:Sexe",
+  "attribute:Style",
+  "attribute_data:Style",
+  "attribute_default:Style",
+  "attribute:Tranche dâge",
+  "attribute_data:Tranche dâge",
+  "attribute_default:Tranche dâge",
+  "attribute:Type Darticle",
+  "attribute_data:Type Darticle",
+  "attribute_default:Type Darticle",
+  "attribute:Type de Source",
+  "attribute_data:Type de Source",
+  "attribute_default:Type de Source",
+  "attribute:Type de matériau",
+  "attribute_data:Type de matériau",
+  "attribute_default:Type de matériau",
+  "attribute:Télécommande incluse",
+  "attribute_data:Télécommande incluse",
+  "attribute_default:Télécommande incluse",
+  "attribute:Unités",
+  "attribute_data:Unités",
+  "attribute_default:Unités",
+  "attribute:Utilisation spéciale",
+  "attribute_data:Utilisation spéciale",
+  "attribute_default:Utilisation spéciale",
+  "attribute:Valeurs éducatives",
+  "attribute_data:Valeurs éducatives",
+  "attribute_default:Valeurs éducatives",
+  "attribute:pa_color",
+  "attribute_data:pa_color",
+  "attribute_default:pa_color",
+  "attribute:pa_couleur",
+  "attribute_data:pa_couleur",
+  "attribute_default:pa_couleur",
+  "attribute:pa_taille",
+  "attribute_data:pa_taille",
+  "attribute_default:pa_taille",
+  "attribute:Âge",
+  "attribute_data:Âge",
+  "attribute_default:Âge",
+  "attribute:Âge recommandé par le fabricant",
+  "attribute_data:Âge recommandé par le fabricant",
+  "attribute_default:Âge recommandé par le fabricant"];
+
 const csvWriterReworkAppend = createCsvWriter({
   path: 'productsRework.csv',
-  header: csvHeaderRework,
+  header: csvHeaderProductsFull,
   append: true,
 });
 
@@ -224,6 +442,47 @@ function isPromptYes(val) {
   return ["oui", 'o', 'yes', 'y'].includes(val.toLowerCase());
 }
 
+async function getBestTryLevenshtein(originText, fct, nbRetry = LEVENSHTEIN_MAX_RETRY, maxPercent = LEVENSHTEIN_PERCENT) {
+  let retry = 0;
+  let distanceLevenshtein = 0;
+  let percentLevenshtein = 0;
+  let sectionText = "";
+  let best = { percent: 100, text: '' };
+
+  do {
+    sectionText = await asyncCallOpenAI(fct(originText));
+
+    // Levenshtein
+    str1 = originText;
+    str2 = sectionText;
+    distanceLevenshtein = stringUtils.levenshteinDistance(str1, str2);
+    percentLevenshtein = stringUtils.levenshteinSimilarity(distanceLevenshtein, str1, str2);
+    separator();
+    console.log(str1);
+    console.log("\nVS\n");
+    console.log(str2);
+    separator();
+    console.log("Résultat Levenshtein :", distanceLevenshtein, `${percentLevenshtein}%`);
+    separator();
+
+    // Compare similarity percent to save the new best
+    if (best.percent > percentLevenshtein) {
+      best = { percent: percentLevenshtein, text: sectionText };
+    }
+    retry++;
+  } while (percentLevenshtein > maxPercent && retry <= nbRetry);
+
+  if (best.text) {
+    sectionText = best.text;
+  }
+
+  if (best.percent > maxPercent) {
+    fs.appendFileSync(DEFAULT_LEVENSHTEIN_PATH, `${originText}-${best.percent}%\n${best.text}\n`)
+  }
+
+  return sectionText;
+}
+
 async function asyncGetUrlHTML(url) {
   let options = {};
   options.redirect = "follow";
@@ -252,8 +511,8 @@ async function asyncCallOpenAI(prompt) {
     temperature: 0.7,
     max_tokens: 3000,
     top_p: 1,
-    frequency_penalty: 0.4,
-    presence_penalty: 0.2,
+    frequency_penalty: 0.4 * frequency_multiplier,
+    presence_penalty: 0.2 * presence_multiplier,
   });
 
   separator();
@@ -281,29 +540,36 @@ async function asyncCallOpenAI(prompt) {
   if (REWRITE_PRODUCTS) {
     let products = await csvProductsEnd;
     productsData = await Promise.all(
-      products.map(async ({ url }) => {
+      products.map(async ({ post_content: url, ...rest }) => {
         const isUrl = url.startsWith("http");
-        const res = isUrl ? await asyncGetUrlHTML(url) : url;
-        let html = res;
-        separator();
-        console.log(`- ${isUrl ? url : `description: ${url}`} -`);
-        separator();
-        const description = htmlUtils.getDescriptionFromHTML(html, url);
-        console.log(description)
-        separator();
-        return { description: description, url: url }
+        let description = url;
+        if (isUrl) {
+          let html = await asyncGetUrlHTML(url);
+          separator();
+          console.log(`- url: ${url} -`);
+          separator();
+          description = htmlUtils.getDescriptionFromHTML(html, url);
+          separator();
+        }
+        description = stringUtils.removeAllTags(description);
+        console.log(`- description: ${description} -`);
+        return { description: description, url: url, ...rest }
       }));
-
+    
     for (let j = 0; j < productsData.length; j++) {
-      const { description, url } = productsData[j];
-      const text = await asyncCallOpenAI(createPromptReworkDescription(description));
-      csvWriterReworkAppend.writeRecords([{ description: text, url: url }])
+      const { description, url, post_title, ...rest } = productsData[j];
+      let title = await asyncCallOpenAI(createPromptReworkTitle(post_title));
+      console.log("new title", title , "vs", post_title);
+      let text = await asyncCallOpenAI(createPromptReworkDescription1(description));
+      //text = await asyncCallOpenAI(createPromptReworkDescription2(text));
+      text = await getBestTryLevenshtein(text, createPromptReworkDescription2);
+      csvWriterReworkAppend.writeRecords([{ ...rest, post_content: text, post_title: title }])
     }
 
     separator();
     console.log("Rework products END")
     separator();
-    return
+    return;
   }
 
   const res = [];

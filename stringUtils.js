@@ -37,6 +37,10 @@ function escapeHtml(unsafe) {
     .replace(/'/g, "&#039;");
 }
 
+function removeAllTags(str) {
+  return str.replaceAll(/<.*?>/gm, "");
+}
+
 function countOccurenceOfString(string, substring, wordOnly = true) {
   let regex = null;
   if (wordOnly) {
@@ -100,6 +104,7 @@ exports.removeEmoji = removeEmoji;
 exports.levenshteinDistance = levenshteinDistance;
 exports.levenshteinSimilarity = levenshteinSimilarity;
 exports.escapeHtml = escapeHtml;
+exports.removeAllTags = removeAllTags;
 exports.countOccurenceOfString = countOccurenceOfString;
 exports.getIndexesOfString = getIndexesOfString;
 exports.replaceTooOften = replaceTooOften;
