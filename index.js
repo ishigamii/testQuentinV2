@@ -36,7 +36,9 @@ const intervaleHour = "12";
 const outputFormat = "YYYY-MM-DD HH:mm";
 
 // OpenAi
-let frequency_multiplier = 5;
+const frequency_multiplier_default = 3;
+let frequency_multiplier = 3;
+const presence_multiplier_default = 2;
 let presence_multiplier = 2;
 
 const regexTable = /^\s*(\d\s?(\.|\)))*\s*/;
@@ -113,7 +115,7 @@ const createPrompt6 = (titre) => {
 
 // Prompt to rework Title
 const createPromptReworkTitle = (title) => {
-  return `Reformule complète ce titre produit afin de le rendre plus court et impactant : "${title}"\n\nTitre reformulé :`
+  return `paraphrase complètement ce titre produit afin de le rendre plus court et impactant : "${title}"\n\nTitre paraphrasé :`
 }
 
 const createPromptReworkDescription1 = (description) => {
@@ -121,7 +123,7 @@ const createPromptReworkDescription1 = (description) => {
 }
 
 const createPromptReworkDescription2 = (description) => {
-  return `Reformule totalement en français chaque phrase du texte suivant : "${description}"\nutilise un ton engageant\nConserve toujours les accents\n\nTexte engageant reformulé :`
+  return `paraphrase totalement en français chaque phrase du texte suivant : "${description}"\nutilise un ton engageant\nConserve toujours les accents\n\nTexte engageant reformulé :`
 }
 
 // OpenAI Config
@@ -403,7 +405,8 @@ const csvHeaderProductsFull = ["post_title",
   "attribute_default:Âge",
   "attribute:Âge recommandé par le fabricant",
   "attribute_data:Âge recommandé par le fabricant",
-  "attribute_default:Âge recommandé par le fabricant"];
+  "attribute_default:Âge recommandé par le fabricant",
+  "percent_levenshtein"];
 
 const csvWriterReworkAppend = createCsvWriter({
   path: 'productsRework.csv',
@@ -442,15 +445,26 @@ function isPromptYes(val) {
   return ["oui", 'o', 'yes', 'y'].includes(val.toLowerCase());
 }
 
-async function getBestTryLevenshtein(originText, fct, nbRetry = LEVENSHTEIN_MAX_RETRY, maxPercent = LEVENSHTEIN_PERCENT) {
+function sleep(milliseconds) {
+  const date = Date.now();
+  let currentDate = null;
+  do {
+    currentDate = Date.now();
+  } while (currentDate - date < milliseconds);
+}
+
+async function getBestTryLevenshtein(originText, reworkText, fct, nbRetry = LEVENSHTEIN_MAX_RETRY, maxPercent = LEVENSHTEIN_PERCENT) {
   let retry = 0;
   let distanceLevenshtein = 0;
   let percentLevenshtein = 0;
   let sectionText = "";
-  let best = { percent: 100, text: '' };
+  let best = { percent: 101, text: '' };
+
+  // Reset frequency_multiplier
+  frequency_multiplier = frequency_multiplier_default;
 
   do {
-    sectionText = await asyncCallOpenAI(fct(originText));
+    sectionText = await asyncCallOpenAI(fct(reworkText));
 
     // Levenshtein
     str1 = originText;
@@ -470,6 +484,7 @@ async function getBestTryLevenshtein(originText, fct, nbRetry = LEVENSHTEIN_MAX_
       best = { percent: percentLevenshtein, text: sectionText };
     }
     retry++;
+    frequency_multiplier += 1;
   } while (percentLevenshtein > maxPercent && retry <= nbRetry);
 
   if (best.text) {
@@ -480,7 +495,7 @@ async function getBestTryLevenshtein(originText, fct, nbRetry = LEVENSHTEIN_MAX_
     fs.appendFileSync(DEFAULT_LEVENSHTEIN_PATH, `${originText}-${best.percent}%\n${best.text}\n`)
   }
 
-  return sectionText;
+  return best;
 }
 
 async function asyncGetUrlHTML(url) {
@@ -555,15 +570,19 @@ async function asyncCallOpenAI(prompt) {
         console.log(`- description: ${description} -`);
         return { description: description, url: url, ...rest }
       }));
-    
+
     for (let j = 0; j < productsData.length; j++) {
       const { description, url, post_title, ...rest } = productsData[j];
       let title = await asyncCallOpenAI(createPromptReworkTitle(post_title));
-      console.log("new title", title , "vs", post_title);
+      console.log("new title", title, "vs", post_title);
       let text = await asyncCallOpenAI(createPromptReworkDescription1(description));
-      //text = await asyncCallOpenAI(createPromptReworkDescription2(text));
-      text = await getBestTryLevenshtein(text, createPromptReworkDescription2);
-      csvWriterReworkAppend.writeRecords([{ ...rest, post_content: text, post_title: title }])
+      const res = await getBestTryLevenshtein(description, text, createPromptReworkDescription2);
+      csvWriterReworkAppend.writeRecords([{ ...rest, post_content: res.text, post_title: title, percent_levenshtein: res.percent }])
+      
+      if (j % 20 === 0) {
+        console.log("gonna sleep for 60s");
+        sleep(60000);
+      }
     }
 
     separator();
