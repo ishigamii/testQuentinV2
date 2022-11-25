@@ -31,7 +31,7 @@ function getDescriptionFromHTML(html, url) {
 * @param html The html
 * @param maxHeaderNumber max header number not included if 4 will only take h1/h2/h3
 */
-function getTitlesFromHTML(html, maxHeaderNumber = 4) {
+function getTitlesFromHTML(html, maxHeaderNumber = 7) {
   if (html && !!html.trim()) {
     const { JSDOM } = jsdom;
     const document = new JSDOM(html).window.document;

@@ -556,8 +556,9 @@ async function asyncCallOpenAI(prompt) {
     let products = await csvProductsEnd;
     productsData = await Promise.all(
       products.map(async ({ post_content: url, ...rest }) => {
+        console.log(url)
         const isUrl = url.startsWith("http");
-        let description = url;
+        let description = url || rest.post_excerpt;
         if (isUrl) {
           let html = await asyncGetUrlHTML(url);
           separator();
@@ -573,12 +574,16 @@ async function asyncCallOpenAI(prompt) {
 
     for (let j = 0; j < productsData.length; j++) {
       const { description, url, post_title, ...rest } = productsData[j];
+      // skip if no description
+      if (!description) {
+        continue; 
+      }
       let title = await asyncCallOpenAI(createPromptReworkTitle(post_title));
       console.log("new title", title, "vs", post_title);
       let text = await asyncCallOpenAI(createPromptReworkDescription1(description));
       const res = await getBestTryLevenshtein(description, text, createPromptReworkDescription2);
       csvWriterReworkAppend.writeRecords([{ ...rest, post_content: res.text, post_title: title, percent_levenshtein: res.percent }])
-      
+
       if (j % 20 === 0) {
         console.log("gonna sleep for 60s");
         sleep(60000);
@@ -729,12 +734,10 @@ async function asyncCallOpenAI(prompt) {
         separator();
         if (formatedSubject) {
           if (EXTRACT_HTML || EXTRACT_HTMLS) {
-            backgroundInfo = extractFiltered[i].paragraph;
+            backgroundInfo = extractFiltered[i]?.paragraph;
             if (backgroundInfo) {
               aiPrompt = createPrompt31(backgroundInfo);
               backgroundInfo = await asyncCallOpenAI(aiPrompt);
-            }
-            if (backgroundInfo) {
               aiPrompt = createPrompt311(backgroundInfo);
               backgroundInfo = await asyncCallOpenAI(aiPrompt);
             }
@@ -746,39 +749,48 @@ async function asyncCallOpenAI(prompt) {
           let sectionText = "";
           let best = { percent: 100, text: '' };
 
-          do {
+          if (EXTRACT_HTML || EXTRACT_HTMLS) {
+            do {
+              aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
+              if (deepthNext > deepth) {
+                aiPrompt = createPrompt2(formatedSubject);
+              }
+              sectionText = await asyncCallOpenAI(aiPrompt);
+
+              // Levenshtein
+              str1 = extractFiltered[i].paragraph;
+              str2 = sectionText;
+              distanceLevenshtein = stringUtils.levenshteinDistance(str1, str2);
+              percentLevenshtein = stringUtils.levenshteinSimilarity(distanceLevenshtein, str1, str2);
+              separator();
+              console.log(str1);
+              console.log("\nVS\n");
+              console.log(str2);
+              separator();
+              console.log("Résultat Levenshtein :", distanceLevenshtein, `${percentLevenshtein}%`);
+              separator();
+
+              // Compare similarity percent to save the new best
+              if (best.percent > percentLevenshtein) {
+                best = { percent: percentLevenshtein, text: sectionText };
+              }
+              retry++;
+            } while (percentLevenshtein > LEVENSHTEIN_PERCENT && retry <= LEVENSHTEIN_MAX_RETRY);
+
+            if (best.text) {
+              sectionText = best.text;
+            }
+
+            if (best.percent > LEVENSHTEIN_PERCENT) {
+              fs.appendFileSync(DEFAULT_LEVENSHTEIN_PATH, `${formatedSubject}-${best.percent}%\n${best.text}\n`)
+            }
+          }
+          else {
             aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
             if (deepthNext > deepth) {
               aiPrompt = createPrompt2(formatedSubject);
             }
             sectionText = await asyncCallOpenAI(aiPrompt);
-
-            // Levenshtein
-            str1 = extractFiltered[i].paragraph;
-            str2 = sectionText;
-            distanceLevenshtein = stringUtils.levenshteinDistance(str1, str2);
-            percentLevenshtein = stringUtils.levenshteinSimilarity(distanceLevenshtein, str1, str2);
-            separator();
-            console.log(str1);
-            console.log("\nVS\n");
-            console.log(str2);
-            separator();
-            console.log("Résultat Levenshtein :", distanceLevenshtein, `${percentLevenshtein}%`);
-            separator();
-
-            // Compare similarity percent to save the new best
-            if (best.percent > percentLevenshtein) {
-              best = { percent: percentLevenshtein, text: sectionText };
-            }
-            retry++;
-          } while (percentLevenshtein > LEVENSHTEIN_PERCENT && retry <= LEVENSHTEIN_MAX_RETRY);
-
-          if (best.text) {
-            sectionText = best.text;
-          }
-
-          if (best.percent > LEVENSHTEIN_PERCENT) {
-            fs.appendFileSync(DEFAULT_LEVENSHTEIN_PATH, `${formatedSubject}-${best.percent}%\n${best.text}\n`)
           }
 
           if (!sectionText.includes(`<h${deepth}>`)) {
