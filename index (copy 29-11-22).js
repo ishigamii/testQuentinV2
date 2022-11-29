@@ -17,9 +17,8 @@ let globalTotalUsed = 0;
 // Configuration
 
 const SHOW_PROMPT = true;
-const NO_TABLE_VALIDATION = true;
 const EXTRACT_HTML = false;
-const EXTRACT_HTMLS = true;
+const EXTRACT_HTMLS = false;
 const USE_BACKGROUND_INFO = false || EXTRACT_HTML || EXTRACT_HTMLS;
 const REWRITE_PRODUCTS = false;
 const LEVENSHTEIN_PERCENT = 65; // percent max otherwise we reload
@@ -29,7 +28,6 @@ const options = [{ label: "Background info", value: USE_BACKGROUND_INFO },
 { label: "Extract from html", value: EXTRACT_HTML },
 { label: "Extract from csv htmls", value: EXTRACT_HTMLS },
 { label: "Show prompt", value: SHOW_PROMPT },
-{ label: "Don't ask for table validation", value: NO_TABLE_VALIDATION },
 { label: "Levenshtein percent", value: LEVENSHTEIN_PERCENT },
 { label: "Levenshtein max retry", value: LEVENSHTEIN_MAX_RETRY }]
 
@@ -65,11 +63,11 @@ const DEFAULT_LEVENSHTEIN_PATH = "levenshteinMore65.txt";
 // Prompts
 
 const createPrompt1 = (titre) => {
-  return `rédige une table des matières très détaillée pour un article sur le sujet : "${titre}""\nCommencer chaque élément de la table des matières par un chiffre suivi directement d'un point pour la numerotation\nNe jamais utiliser de , dans la numerotation\nNe jamais utiliser d'espace dans la numerotation\nToujours Retourner à la ligne après chaque élément\nNe pas utiliser de points après chaque élément\nNe pas prévoir une partie Introduction\nNe pas prévoir une partie Conclusion.\n`
+  return `rédige une table des matières très détaillée au format texte uniquement pour un article sur le sujet : ${titre}\nTCommencer chaque élément de la table des matières par un chiffre suivi directement d'un point pour la numerotation\nNe jamais utiliser de , dans la numerotation\nNe jamais utiliser d'espace dans la numerotation\nRetourner à la ligne après chaque élément\nNe pas utiliser de points après chaque élément\nNe pas prévoir une partie Introduction\nNe pas prévoir une partie Conclusion.`
 }
 
 const createPrompt11 = (titre, outputPrompt1) => {
-  return `Pour un article sur le sujet: ${titre} Repete cette table des matières: ${outputPrompt1}.`
+  return `Pour un article sur le sujet: ${titre} Repete cette table des matières: ${outputPrompt1} \nRéfléchis à des améliorations qui pourraient être apportées à ce sommaire pour qu'il soit plus complet et plus efficace.\nToujours Utiliser une numerotation au format "1." pour chaque elémént et "1.1." pour chaque sous-élément et "1.1.1." pour chaque Sous-sous-élément\nNe jamais utiliser de "," ou d'espace " " dans la numerotation\nRetourner à la ligne après chaque élément\nNe pas utiliser de points après chaque élément\nNe pas prévoir une partie Introduction\nNe pas prévoir une partie Conclusion.`
 }
 
 const createPrompt2 = (titre, outputPrompt11) => {
@@ -82,7 +80,7 @@ const createPrompt3 = (titre, outputPrompt1) => {
 
 // Reformule background
 const createPrompt31 = (backgroundInfo) => {
-  return `Identifie les informations clés de ce texte puis Reformule les complètement et integre les dans nouveau texte en français :\n"${backgroundInfo}"\n\nTexte reformulé :`
+  return `Reformule complètement ce texte en français :\n"${backgroundInfo}"\n\nTexte reformulé :`
 }
 
 // infos-clés du background reformulé
@@ -127,12 +125,6 @@ const createPromptReworkDescription1 = (description) => {
 const createPromptReworkDescription2 = (description) => {
   return `paraphrase totalement en français chaque phrase du texte suivant : "${description}"\nutilise un ton engageant\nConserve toujours les accents\n\nTexte engageant reformulé :`
 }
-
-// Prompt to rework Article Title & pararaphs 
-const createPromptReworkArticleTitle = (title) => {
-  return `reformule complètement ce titre de paragraphe : ${title}\n\nTitre paraphrasé :`
-}
-
 
 // OpenAI Config
 
@@ -521,7 +513,7 @@ async function asyncGetUrlHTML(url) {
   return body;
 }
 
-async function asyncCallOpenAI(prompt, noPenalty = false) {
+async function asyncCallOpenAI(prompt) {
   if (SHOW_PROMPT) {
     separator();
     console.log(`-- Running this prompt --`);
@@ -534,8 +526,8 @@ async function asyncCallOpenAI(prompt, noPenalty = false) {
     temperature: 0.7,
     max_tokens: 3000,
     top_p: 1,
-    frequency_penalty: (noPenalty ? 0 : 0.4) * frequency_multiplier,
-    presence_penalty: (noPenalty ? 0 : 0.2) * presence_multiplier,
+    frequency_penalty: 0.4 * frequency_multiplier,
+    presence_penalty: 0.2 * presence_multiplier,
   });
 
   separator();
@@ -584,7 +576,7 @@ async function asyncCallOpenAI(prompt, noPenalty = false) {
       const { description, url, post_title, ...rest } = productsData[j];
       // skip if no description
       if (!description) {
-        continue;
+        continue; 
       }
       let title = await asyncCallOpenAI(createPromptReworkTitle(post_title));
       console.log("new title", title, "vs", post_title);
@@ -647,8 +639,7 @@ async function asyncCallOpenAI(prompt, noPenalty = false) {
       let html = EXTRACT_HTML ? fs.readFileSync(DEFAULT_HTML_PATH, "utf8") : websites[j]?.html;
       extract = htmlUtils.getTitlesFromHTML(html);
       tableMatiere = htmlUtils.getTableMatiere(extract);
-      extractFiltered = extract.filter((e) => e.tag !== 'H1');
-      titres = [extract[0].title];
+      extractFiltered = extract.filter((e) => e.tag !== 'H1')
 
       if (EXTRACT_HTML) {
         console.log(tableMatiere)
@@ -671,20 +662,15 @@ async function asyncCallOpenAI(prompt, noPenalty = false) {
 
       let text = "";
       if (!EXTRACT_HTML && !EXTRACT_HTMLS) {
-        let aiPrompt = createPrompt1(titre, no);
+        let aiPrompt = createPrompt1(titre);
 
         while (true) {
-          text = await asyncCallOpenAI(aiPrompt, true);
+          text = await asyncCallOpenAI(aiPrompt);
           separator();
           console.log("Ancienne génération\n", saved.join('\n'));
           separator();
           console.log(text);
           separator();
-
-          if( NO_TABLE_VALIDATION) {
-            text = fs.readFileSync(DEFAULT_TABLE_CONTENT_PATH, "utf8");
-            break;
-          }
 
           const response = prompt("On continue avec ça ? (Réponse: Oui/Non/Combo)");
           if (isPromptYes(response)) {
@@ -702,7 +688,7 @@ async function asyncCallOpenAI(prompt, noPenalty = false) {
           saved.push(text);
         }
 
-        for (let i = 0; i < 0; i++) {
+        for (let i = 0; i < 2; i++) {
           separator();
           console.log(text);
           aiPrompt = createPrompt11(titre, text);
@@ -742,12 +728,7 @@ async function asyncCallOpenAI(prompt, noPenalty = false) {
         separator();
         const deepth = getDeepth(subjects[i]);
         const deepthNext = getDeepth(subjects[i + 1]);
-        let formatedSubject = subjects[i].replace(regexTable, "")
-        if (formatedSubject && (EXTRACT_HTML || EXTRACT_HTMLS)) {
-          const newSubject = await asyncCallOpenAI(createPromptReworkArticleTitle(formatedSubject));
-          console.log(`old subject: ${formatedSubject} vs new ${newSubject}`);
-          formatedSubject = newSubject;
-        }
+        const formatedSubject = subjects[i].replace(regexTable, "")
         deepthParent[deepth] = formatedSubject;
         console.log(formatedSubject)
         separator();
@@ -756,9 +737,9 @@ async function asyncCallOpenAI(prompt, noPenalty = false) {
             backgroundInfo = extractFiltered[i]?.paragraph;
             if (backgroundInfo) {
               aiPrompt = createPrompt31(backgroundInfo);
-              //backgroundInfo = await asyncCallOpenAI(aiPrompt);
-              // aiPrompt = createPrompt311(backgroundInfo);
-              // backgroundInfo = await asyncCallOpenAI(aiPrompt);
+              backgroundInfo = await asyncCallOpenAI(aiPrompt);
+              aiPrompt = createPrompt311(backgroundInfo);
+              backgroundInfo = await asyncCallOpenAI(aiPrompt);
             }
           }
 
@@ -770,11 +751,10 @@ async function asyncCallOpenAI(prompt, noPenalty = false) {
 
           if (EXTRACT_HTML || EXTRACT_HTMLS) {
             do {
-              /*
               aiPrompt = createPrompt4(deepth > 2 ? deepthParent[deepth - 1] : titre, formatedSubject, deepth);
               if (deepthNext > deepth) {
                 aiPrompt = createPrompt2(formatedSubject);
-              }*/
+              }
               sectionText = await asyncCallOpenAI(aiPrompt);
 
               // Levenshtein
